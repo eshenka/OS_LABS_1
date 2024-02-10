@@ -1,0 +1,45 @@
+Question: What is elf file?
+Answer: An ELF (Executable and Linkable Format) file is a file format used by the 
+Linux kernel and other Unix-like operating systems to store executable 
+code, libraries, and object files. It is a type of relocatable file that 
+can be linked with other files to create an executable program.
+
+ELF files typically have a .elf extension and contain metadata about the 
+contents of the file, such as the location and size of each section, the 
+dependencies on other files, and the entry point for the program. They are
+commonly used in embedded systems, where they provide a way to run 
+programs that are designed to be run on a specific hardware platform.
+
+ELF files can also be created using the GNU C compiler and linker, which 
+produce ELF files as output. These files can be loaded into memory by the 
+operating system and executed, allowing developers to write and test code 
+in a development environment before deploying it to production.
+
+question: ell me about compiling c code steps in Linux
+Answer: Compiling C code on a Linux system involves several steps. Here's an 
+overview of the process:
+
+1. Write the C program: The first step is to write the C program that you 
+want to compile. You can use any text editor or IDE (Integrated 
+Development Environment) to write your code.
+2. Save the file: Once you have written the code, you need to save it in a
+file with a `.c` extension. For example, if your program is called 
+"hello_world", you would create a file named `hello_world.c`.
+3. Compile the code: To compile the C code, you need to use a compiler. In
+Linux, the default compiler is called `gcc`. You can run the command `gcc 
+hello_world.c` in your terminal to compile the program. The output of the 
+compilation will be an object file named `hello_world.o`.
+4. Link the object file: After compiling the code, you need to link the 
+object file with the libraries that your program requires. You can do this
+by running the command `gcc hello_world.o -o hello_world` in your 
+terminal. This will create an executable file named `hello_world`.
+5. Run the program: Finally, you can run the program by executing the 
+executable file in your terminal. You can do this by running the command 
+`./hello_world`. This will execute the program and display any output that
+it produces.
+
+Note: If you are using a different compiler than `gcc`, such as `clang` or
+`icc`, you may need to use a different command to compile and link your 
+code. Be sure to consult the documentation for your specific compiler to 
+learn more about how to compile and link C code on Linux.
+
