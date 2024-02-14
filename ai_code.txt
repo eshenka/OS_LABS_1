@@ -1,0 +1,79 @@
+#include <mpi.h>
+#include <iostream>
+
+int main(int argc, char** argv) {
+    // Initialize the MPI environment
+    MPI_Init(&argc, &argv);
+
+    // Get the rank of the process
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    // Get the size of the communicator
+    int commSize;
+    MPI_Comm_size(MPI_COMM_WORLD, &commSize);
+
+    // Create a 2D matrix with rows of size N and columns of size M
+    const int N = 10;
+    const int M = 5;
+    double* matrix = new double[N * M];
+
+    // Initialize the matrix elements
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            matrix[i * M + j] = rank + 1.0;
+        }
+    }
+
+    // Create a vector type to gather the matrix elements
+    MPI_Datatype vectorType;
+    MPI_Type_vector(N, M, N, MPI_DOUBLE, &vectorType);
+
+    // Gather the matrix elements in the root process
+    double* gatheredMatrix = nullptr;
+    if (rank == 0) {
+        gatheredMatrix = new double[commSize * N * M];
+    }
+    MPI_Gatherv(matrix, N * M, vectorType, gatheredMatrix, NULL, NULL, 
+MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Print the gathered matrix elements in the root process
+    if (rank == 0) {
+        for (int i = 0; i < commSize * N * M; i++) {
+            std::cout << gatheredMatrix[i] << " ";
+        }
+        std::cout << "\n";
+    }
+
+    // Clean up the matrix and vector type
+    delete[] matrix;
+    MPI_Type_free(&vectorType);
+
+    // Finalize the MPI environment
+    MPI_Finalize();
+
+    return 0;
+}
+```
+This code creates a 2D matrix with rows of size N and columns of size M, 
+initializes its elements, and then uses MPI_Gatherv to gather the matrix 
+elements in the root process. The gathered matrix is printed in the root 
+process. The vector type is created using MPI_Type_vector and is used to 
+specify the distribution of the matrix elements during the gather 
+operation.
+
+In this example, we assume that there are 4 processes in the communicator.
+The matrix is distributed among the 4 processes, with each process 
+responsible for a sub-matrix of size N x M. The root process receives the 
+gathered matrix, which is a 2D array of size 4 x N x M, where each element
+corresponds to a sub-matrix of the original matrix.
+
+The code first initializes the matrix elements and then creates a vector 
+type using MPI_Type_vector. The vector type specifies that each process 
+should gather its own sub-matrix of size N x M. The gathered matrix is 
+allocated in the root process and initialized to NULL. Then, the matrix 
+elements are gathered using MPI_Gatherv, with the gather count set to N * 
+M (the number of rows in the original matrix) and the displacement vector 
+set to NULL. The gathered matrix is printed in the root process. Finally, 
+the code frees the memory allocated for the matrix and vector type, and 
+finalizes the MPI environment using MPI_Finalize.
