@@ -1,0 +1,7 @@
+scp -i ~/.ssh/lin_privkey /home/yuliayureva/Desktop/OPP/lab1/main.c fit_opp@84.237.52.213:/home/fit_opp/22202/Yureva/lab1
+
+ssh -i ~/.ssh/lin_privkey fit_opp@cluster-gpn.nsu.ru
+
+
+scp -i ~/.ssh/lin_privkey fit_opp@84.237.52.213:/home/fit_opp/22202/Yureva/lab1/parallel_2_mpe /home/yuliayureva/Desktop/OPP/lab1/
+

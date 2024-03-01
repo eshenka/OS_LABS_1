@@ -1,0 +1,14 @@
+1) Creating object file from a c file which contains some functions we need in our librart
+	
+	gcc -c hello_from_static.c
+
+
+2) Creating archive "staticlib" using all needed object files 
+
+	ar r libstaticlib.a hello_from_static.o
+
+
+3) Compiling file
+
+	gcc hello.c -L. -lstaticlib -o result
+

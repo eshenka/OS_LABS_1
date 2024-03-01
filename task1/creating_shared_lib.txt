@@ -1,0 +1,4 @@
+gcc -c -fPIC hello_from_dynamic.c
+gcc -shared -o libdynamic_lib.so hello_from_dynamic.o
+gcc hello.c -L. -ldynamic_lib -o helli_dynamic
+LD_LIBRARY_PATH=$PWD
