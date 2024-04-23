@@ -61,16 +61,11 @@ void print_file(char* file_name) {
     size_t buffer_size = 100;
     char buffer[buffer_size];
 
-    while (1) {
-        char symbol = fgetc(file);
-        if (feof(file)) {
-            break;
-        }
-
-        printf("%c", symbol);
+    while(!feof(file)) {
+        size_t n = fread(buffer, buffer_size - 1, 1, file);
+        buffer[n - 1] = '\0';
+        printf("%s\n", buffer);
     }
-
-
 }
 
 void remove_file(char* file_name) {
