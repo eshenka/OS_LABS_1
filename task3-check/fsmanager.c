@@ -63,7 +63,7 @@ void print_file(char* file_name) {
 
     while(!feof(file)) {
         size_t n = fread(buffer, buffer_size - 1, 1, file);
-        buffer[n - 1] = '\0';
+        buffer[n] = '\0';
         printf("%s\n", buffer);
     }
 }
@@ -87,14 +87,14 @@ void read_symlink(char* filename) {
     size_t buffer_size = 1024;
     char buffer[buffer_size];
 
-    int link = readlink(filename, buffer, buffer_size);
+    int link_size = readlink(filename, buffer, buffer_size);
 
-    if (link == -1) {
+    if (link_size == -1) {
         perror("Unable to read symlink");
         exit(0);
     }
 
-    buffer[link] = '\0';
+    buffer[link_size] = '\0';
     printf("%s\n", buffer);
 }
 
@@ -102,13 +102,13 @@ void print_symlink_content(char* linkname) {
     size_t buffer_size = 1024;
     char buffer[buffer_size];
 
-    int link = readlink(linkname, buffer, buffer_size);
+    int link_size = readlink(linkname, buffer, buffer_size);
 
-    if (link == -1) {
+    if (link_size == -1) {
         perror("Unable to read symlink");
     }
 
-    buffer[link] = '\0';
+    buffer[link_size] = '\0';
 
     print_file(buffer);
 }
