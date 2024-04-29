@@ -6,7 +6,6 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
 #include <math.h>
 
 void make_directory(char* dir_name) {
@@ -179,67 +178,76 @@ void change_mode(char* name, int mode) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
+    if (argc < 2 || 3 < argc) {
         perror("Invalid arguments\n");
         exit(0);
     }
 
-    if (!strcmp(argv[0], "./make_directory")) {
-        printf("im making the directory...\n");
-        make_directory(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./list_directory")) {
-        printf("Reading the directory...\n");
-        list_directory(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./remove_directory")) {
-        printf("Deleting directory...\n");
-        remove_directory(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./make_file")) {
-        printf("Making file...\n");
-        make_file(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./print_file")) {
-        printf("Printing file...\n");
-        print_file(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./remove_file")) {
-        printf("Deleting file...\n");
-        remove_file(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./create_sym_link")) {
-        printf("Creating symlink...\n");
-        create_sym_link(argv[1], argv[2]);
-    }
-    else if (!strcmp(argv[0], "./read_symlink")) {
-        printf("Reading symlink...\n");
-        read_symlink(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./print_symlink")) {
-        printf("Printing symlink content...\n");
-        print_symlink_content(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./remove_symlink")) {
-        printf("Deleting symlink...\n");
-        remove_file(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./create_link")) {
-        printf("Creating link...\n");
-        create_link(argv[1], argv[2]);
-    }
-    else if (!strcmp(argv[0], "./remove_link")) {
-        printf("Removing link...");
-        remove_file(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./file_stat")) {
-        file_stat(argv[1]);
-    }
-    else if (!strcmp(argv[0], "./change_mode")) {
-        change_mode(argv[1], atoi(argv[2]));
-    }
-    else {
-        printf("i dont know how to do this yet\n");
+    if (argc == 3) {
+        if (!strcmp(argv[0], "./create_link")) {
+            printf("Creating link...\n");
+            create_link(argv[1], argv[2]);
+        }
+        else if (!strcmp(argv[0], "./create_sym_link")) {
+            printf("Creating symlink...\n");
+            create_sym_link(argv[1], argv[2]);
+        }
+        else if (!strcmp(argv[0], "./change_mode")) {
+            printf("Changing mode...\n");
+            change_mode(argv[1], atoi(argv[2]));
+        } 
+        else {
+            printf("This option is unavailable");
+        }
+        
+    } else {
+
+        if (!strcmp(argv[0], "./make_directory")) {
+            printf("Making the directory...\n");
+            make_directory(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./list_directory")) {
+            printf("Reading the directory...\n");
+            list_directory(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./remove_directory")) {
+            printf("Deleting directory...\n");
+            remove_directory(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./make_file")) {
+            printf("Making file...\n");
+            make_file(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./print_file")) {
+            printf("Printing file...\n");
+            print_file(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./remove_file")) {
+            printf("Deleting file...\n");
+            remove_file(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./read_symlink")) {
+            printf("Reading symlink...\n");
+            read_symlink(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./print_symlink")) {
+            printf("Printing symlink content...\n");
+            print_symlink_content(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./remove_symlink")) {
+            printf("Deleting symlink...\n");
+            remove_file(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./remove_link")) {
+            printf("Removing link...");
+            remove_file(argv[1]);
+        }
+        else if (!strcmp(argv[0], "./file_stat")) {
+            file_stat(argv[1]);
+        }
+        else {
+            printf("This option is unavailable\n");
+        }
     }
     return 0;
 }
