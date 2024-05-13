@@ -6,17 +6,26 @@
 
 void heap_allocation(int N, int iters) {
     char* buffers[iters];
+
+    printf("Allocation begins\n");
+
     for (int i = 0; i < iters; i++) {
         buffers[i] = (char*) malloc(N * sizeof(char));
-        //sleep(1);
+        sleep(1);
     }
+
+    printf("Allocation ends\n");
 
     sleep(5);
 
+    printf("Freeing begins\n");
+    
     for (int i = 0; i < iters; i++) {
         free(buffers[i]);
         sleep(1);
     }
+
+    printf("Freeing ends\n");
 }
 
 void add_pages(int pages_number) {
@@ -79,9 +88,9 @@ int main() {
 
     sleep(10);
 
-    int iterations = 1000;
+    int iterations = 50;
     int size = 204800;
-    heap_allocation(size, iterations);
+    //heap_allocation(size, iterations);
 
     sleep(5);
 
