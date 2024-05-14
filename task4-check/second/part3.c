@@ -88,9 +88,9 @@ int main() {
 
     sleep(10);
 
-    int iterations = 50;
+    int iterations = 20;
     int size = 204800;
-    //heap_allocation(size, iterations);
+    heap_allocation(size, iterations);
 
     sleep(5);
 

@@ -5,8 +5,10 @@
 #include <fcntl.h>
 
 void recursive_allocation(int N) {
-    char* buffer = (char*) malloc(N * sizeof(char));
+    //char* buffer = (char*) malloc(N * sizeof(char));
+    char buffer[N];
 
+    sleep(1);
     recursive_allocation(N);
 }
 
@@ -15,7 +17,7 @@ int main() {
 
     printf("PID: %d\n", pid);
 
-    unsigned int seconds = 20;
+    unsigned int seconds = 10;
     sleep(seconds);
 
     recursive_allocation(4096);
