@@ -10,7 +10,8 @@ int global_initialized = 123456;
 int global_uninitialized;
 const int global_const = 987654;
 
-void f(int static_var) {
+void f() {
+    static int static_var = 741258;
     int local_var = 369852;
     const int local_const_var = 147852;
 
@@ -20,7 +21,7 @@ void f(int static_var) {
 }
 
 int main(int argc, char *argv[]) {
-    f(123);
+    f();
     printf("global_initialized:   %p\n", &global_initialized);
     printf("global_uninitialized: %p\n", &global_uninitialized);
     printf("global_const:         %p\n", &global_const);
