@@ -8,7 +8,12 @@
 int main() {
     int page_size = getpagesize();
 
-    unsigned int* page = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    unsigned int* page = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    if (page == MAP_FAILED) {
+        perror("Unable to map");
+        exit(-1);
+    }
 
     pid_t child = fork();
 
@@ -27,8 +32,11 @@ int main() {
     }
 
     if (child == 0) {
-        int i = 0;
+        int i = 5;
         int prev_number = page[i];
+
+        printf("%d\n", prev_number);
+
         i++;
 
         while(1) {
@@ -44,7 +52,9 @@ int main() {
 
             if (cur_number - prev_number != 1) {
                 printf("Not contiguous!\n");
-            }
+            } /*else {
+                printf("Contiguous!\n");
+            }*/
 
             prev_number = cur_number;
 
