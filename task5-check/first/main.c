@@ -28,37 +28,28 @@ int main() {
         printf("\nchild PID: %d\n", child_pid);
         printf("parent PID: %d\n", parent_pid);
 
-        printf("\nVariables in child process\n");
-        printf("global varibale: %p %d\n", &global_var, global_var);
-        printf("local variable:  %p %d\n", &local_var, local_var);
-        
-        global_var = 7;
-        local_var = 8;
+        pid_t grandcild = fork();
 
-        printf("\nChanged variables in child process\n");
-        printf("global varibale: %p %d\n", &global_var, global_var);
-        printf("local variable:  %p %d\n", &local_var, local_var);
-        
+        if (grandcild == 0) {
+
+            printf("%d\n", getppid());
+            sleep(5);
+
+            pid_t newparent = getppid();
+            printf("NEW PARENT PID: %d\n", newparent);
+
+            sleep(50);
+        }
     }
 
+
     if (child_pid != 0) {
-    	printf("\nChanged variables in parent process\n");
-        printf("global varibale: %p %d\n", &global_var, global_var);
-        printf("local variable:  %p %d\n", &local_var, local_var);
-        
-        sleep(10);
-        //exit(0);
+        sleep(40);
+
+        exit(0);
     }
     
     if (child_pid == 0) {
-        sleep(10);
-
-        pid_t newpid = getppid();
-
-        printf("NEW PID: %d\n", newpid);
-        
-        raise(SIGSEGV);
-
     	exit(5);
     }
 
