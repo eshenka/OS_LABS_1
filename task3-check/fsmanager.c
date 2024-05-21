@@ -177,77 +177,147 @@ void change_mode(char* name, int mode) {
     }
 }
 
-int main(int argc, char* argv[]) {
-    if (argc < 2 || 3 < argc) {
-        perror("Invalid arguments\n");
-        exit(0);
+void config_command_name(char* full_name, char* command_name) {
+    int slash_pos = strlen(full_name) - 1;
+
+    while(full_name[slash_pos] != '/') {
+        slash_pos--;
     }
+    slash_pos++;
+    
+    memcpy(command_name, full_name + slash_pos, strlen(full_name) - slash_pos); 
+}
 
-    if (argc == 3) {
-        if (!strcmp(argv[0], "./create_link")) {
-            printf("Creating link...\n");
-            create_link(argv[1], argv[2]);
+int main(int argc, char* argv[]) {
+    char command[256];
+    config_command_name(argv[0], command);
+
+    if (!strcmp(command, "create_link")) {
+        if (argc != 3) {
+            printf("Provide exactly two arguments\n");
+            exit(0);
         }
-        else if (!strcmp(argv[0], "./create_sym_link")) {
-            printf("Creating symlink...\n");
-            create_sym_link(argv[1], argv[2]);
+
+        printf("Creating link...\n");
+        create_link(argv[1], argv[2]);
+
+    } else if (!strcmp(command, "create_sym_link")) {
+        if (argc != 3) {
+            printf("Provide exactly two arguments\n");
+            exit(0);
         }
-        else if (!strcmp(argv[0], "./change_mode")) {
-            printf("Changing mode...\n");
-            change_mode(argv[1], atoi(argv[2]));
-        } 
-        else {
-            printf("This option is unavailable");
+
+        printf("Creating symlink...\n");
+        create_sym_link(argv[1], argv[2]);
+
+    } else if (!strcmp(command, "change_mode")) {
+        if (argc != 3) {
+            printf("Provide exactly two arguments\n");
+            exit(0);
         }
-        
+
+        printf("Changing mode...\n");
+        change_mode(argv[1], atoi(argv[2]));
+
+    } else if (!strcmp(command, "make_directory")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Making the directory...\n");
+        make_directory(argv[1]);
+
+    } else if (!strcmp(command, "list_directory")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Reading the directory...\n");
+        list_directory(argv[1]);
+
+    } else if (!strcmp(command, "remove_directory")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Deleting directory...\n");
+        remove_directory(argv[1]);
+
+    } else if (!strcmp(command, "make_file")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Making file...\n");
+        make_file(argv[1]);
+
+    } else if (!strcmp(command, "print_file")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Printing file...\n");
+        print_file(argv[1]);
+
+    } else if (!strcmp(command, "remove_file")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Deleting file...\n");
+        remove_file(argv[1]);
+
+    } else if (!strcmp(command, "read_symlink")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Reading symlink...\n");
+        read_symlink(argv[1]);
+
+    } else if (!strcmp(command, "print_symlink")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Printing symlink content...\n");
+        print_symlink_content(argv[1]);
+
+    } else if (!strcmp(command, "remove_symlink")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Deleting symlink...\n");
+        remove_file(argv[1]);
+
+    } else if (!strcmp(command, "remove_link")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        printf("Removing link...");
+        remove_file(argv[1]);
+
+    } else if (!strcmp(command, "file_stat")) {
+        if (argc != 2) {
+            printf("Provide exactly one argument\n");
+            exit(0);
+        }
+
+        file_stat(argv[1]);
     } else {
-
-        if (!strcmp(argv[0], "./make_directory")) {
-            printf("Making the directory...\n");
-            make_directory(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./list_directory")) {
-            printf("Reading the directory...\n");
-            list_directory(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./remove_directory")) {
-            printf("Deleting directory...\n");
-            remove_directory(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./make_file")) {
-            printf("Making file...\n");
-            make_file(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./print_file")) {
-            printf("Printing file...\n");
-            print_file(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./remove_file")) {
-            printf("Deleting file...\n");
-            remove_file(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./read_symlink")) {
-            printf("Reading symlink...\n");
-            read_symlink(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./print_symlink")) {
-            printf("Printing symlink content...\n");
-            print_symlink_content(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./remove_symlink")) {
-            printf("Deleting symlink...\n");
-            remove_file(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./remove_link")) {
-            printf("Removing link...");
-            remove_file(argv[1]);
-        }
-        else if (!strcmp(argv[0], "./file_stat")) {
-            file_stat(argv[1]);
-        }
-        else {
-            printf("This option is unavailable\n");
-        }
+        printf("This command is unavailable\n");
     }
     return 0;
 }
