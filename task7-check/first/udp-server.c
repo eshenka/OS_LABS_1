@@ -6,10 +6,9 @@
 #include <string.h>
 #include <netdb.h>
 
-#define PORT 6969
-#define BUFFER_SIZE 256
-
 int main() {
+    const int PORT = 6969;
+
     int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     if (socket_fd == -1) {
@@ -18,8 +17,6 @@ int main() {
     }
 
     struct sockaddr_in server_addr;
-
-    memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -30,30 +27,30 @@ int main() {
         exit(-1);
     }
 
+    const int BUFFER_SIZE = 256;
+    char buffer[BUFFER_SIZE];
+
+    struct sockaddr client_addr;
+    socklen_t addrlen;
+
     while(1) {
-        char buffer[BUFFER_SIZE];
-
-        struct sockaddr client_socket;
-
-        socklen_t addrlen;
-    
-        ssize_t recieved = recvfrom(socket_fd, buffer, BUFFER_SIZE, 0, (struct sockaddr *) &client_socket, &addrlen);
+        ssize_t recieved = recvfrom(socket_fd, buffer, BUFFER_SIZE, 0, &client_addr, &addrlen);
 
         if (recieved == -1) {
             perror("Unable to recieve");
             continue;
-            //exit(-1);
         }
 
         write(STDOUT_FILENO, buffer, recieved);
 
-        ssize_t sent = sendto(socket_fd, buffer, recieved, 0, (struct sockaddr *) &client_socket, addrlen);
+        ssize_t sent = sendto(socket_fd, buffer, recieved, 0, &client_addr, addrlen);
 
         if (sent == -1) {
             perror("Unable to send\n");
-            //exit(-1);
         }
     }
 
     close(socket_fd);
+
+    return 0;
 }
