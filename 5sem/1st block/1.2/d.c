@@ -14,9 +14,11 @@ void* mythread(void* args) {
     //     pthread_exit(NULL);
     // }
 
-    printf("Thread ID: %lu\n Thread TID: %lu\n", pthread_self(), gettid());
+    printf("Thread ID: %lu\n Thread TID: %d\n", pthread_self(), gettid());
 
-    pthread_exit(NULL);
+    /* pthread_exit(NULL); */
+
+    pthread_detach(pthread_self());
 }
 
 int main() {
@@ -30,11 +32,11 @@ int main() {
             return -1;
         }
 
-        err = pthread_join(tid, NULL);
-        if (err != 0) {
-            perror("Failed join");
-            return -2;
-        }
+        // err = pthread_join(tid, NULL);
+        // if (err != 0) {
+        //     perror("Failed join");
+        //     return -2;
+        // }
     }
 
 }
