@@ -11,12 +11,6 @@ typedef struct Mystruct {
 } Mystruct;
 
 void* print_struct(void* args) {
-    int err = pthread_detach(pthread_self());
-    if (err != 0) {
-        perror("Failed detach");
-        pthread_exit(NULL);
-    }
-
     Mystruct* object = (Mystruct*) args;
 
     printf("integer = %d\nstring = %s\n", object->integer, object->str);
@@ -39,10 +33,11 @@ int main() {
         return -1;
     }
 
-    // err = pthread_join(tid, NULL);
-    // if (err != 0) {
-    //     perror("Failed join");
-    //     return -2;
-    // }
+    err = pthread_join(tid, NULL);
+    if (err != 0) {
+        perror("Failed join");
+        return -2;
+    }
 
+    pthread_exit(NULL);
 }

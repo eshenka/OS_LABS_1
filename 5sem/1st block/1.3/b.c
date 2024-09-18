@@ -39,6 +39,5 @@ int main() {
         return -1;
     }
 
-    sleep(10);
-
+    pthread_exit(NULL);
 }
