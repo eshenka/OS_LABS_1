@@ -26,12 +26,13 @@ int main() {
 
     pthread_t tid;
 
-    while (true) {
+    while (true)  {
         err = pthread_create(&tid, &attr, mythread, NULL);
         if (err != 0) {
             perror("Failed create");
             return -1;
         }
-
     }
+
+    pthread_exit(NULL);
 }
