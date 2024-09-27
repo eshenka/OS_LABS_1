@@ -7,16 +7,16 @@
 #include <stdbool.h>
 #include <malloc.h>
 
-void* deallocator(void* arg) {
+void deallocator(void* arg) {
     char* str = (char*) arg;
 
-    printf("String to free: %s\n", str);
+    printf("String to free: %.5s\n", str);
 
     free(arg);
 }
 
 void* print_nonstop(void* args) {
-    char* str = (char*) malloc(sizeof(char) * strlen("Hello World!"));
+    char* str = (char*) malloc(sizeof(char) * strlen("Hello World! "));
     strcpy(str, "Hello World!");
 
     pthread_cleanup_push(deallocator, (void*) str);
@@ -25,7 +25,7 @@ void* print_nonstop(void* args) {
         printf("%s\n", str);
     }
 
-    pthread_cleanup_pop(0);
+    pthread_cleanup_pop(1);
 }
 
 int main() {

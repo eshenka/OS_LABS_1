@@ -17,7 +17,7 @@ void* thread_SIGALRM(void* args) {
     struct sigaction act;
     act.sa_handler = sigalrm_handler;
 
-    err = sigaction(SIGALRM, &act, NULL);
+    err = sigaction(SIGUSR1, &act, NULL);
     if (err != 0) {
         printf("Failed 'sigaction()': %s\n", strerror(err));
         pthread_exit(NULL);
@@ -40,7 +40,7 @@ void* thread_SIGABRT(void* args) {
     struct sigaction act;
     act.sa_handler = sigabrt_handler;
 
-    err = sigaction(SIGABRT, &act, NULL);
+    err = sigaction(SIGUSR2, &act, NULL);
     if (err != 0) {
         printf("Failed 'sigaction()': %s\n", strerror(err));
         pthread_exit(NULL);
@@ -71,7 +71,7 @@ int main() {
     }
 
     printf("Sending SIGALRM to sigalrm thread\n");
-    err = pthread_kill(tid_sigalrm, SIGALRM);
+    err = pthread_kill(tid_sigalrm, SIGUSR1);
     if (err != 0) {
         printf("Failed sending SIGALRM: %s\n", strerror(err));
         return 0;
@@ -79,7 +79,7 @@ int main() {
     sleep(1);
 
     printf("Sending SIGABRT to sigabrt thread\n");
-    err = pthread_kill(tid_sigabrt, SIGABRT);
+    err = pthread_kill(tid_sigabrt, SIGUSR2);
     if (err != 0) {
         printf("Failed sending SIGABRT: %s\n", strerror(err));
         return 0;
@@ -87,7 +87,7 @@ int main() {
     sleep(1);
 
     printf("Sending SIGABRT to sigalrm thread\n");
-    err = pthread_kill(tid_sigalrm, SIGABRT);
+    err = pthread_kill(tid_sigalrm, SIGUSR2);
     if (err != 0) {
         printf("Failed sending SIGABRT\n");
         return 0;
@@ -95,7 +95,7 @@ int main() {
     sleep(1);
 
     printf("Sending SIGALRM to sigabrt thread\n");
-    err = pthread_kill(tid_sigabrt, SIGALRM);
+    err = pthread_kill(tid_sigabrt, SIGUSR1);
     if (err != 0) {
         printf("Failed sending SIGALRM\n");
         return 0;

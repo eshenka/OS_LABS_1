@@ -12,6 +12,8 @@ void *mythread(void *arg) {
 }
 
 int main() {
+    printf("HELLLLOOOO\n");
+
 	pthread_t tid;
 	int err;
 

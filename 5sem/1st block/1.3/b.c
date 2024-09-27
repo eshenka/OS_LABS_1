@@ -18,10 +18,13 @@ void* print_struct(void* args) {
         pthread_exit(NULL);
     }
 
+    sleep(1);
+
     Mystruct* object = (Mystruct*) args;
 
     printf("integer = %d\nstring = %s\n", object->integer, object->str);
 
+    printf("Exiting detached thread...\n");
     pthread_exit(NULL);
 }
 
@@ -38,6 +41,7 @@ int main() {
         perror("Failed create");
         return -1;
     }
-
+    
+    printf("Exiting main...\n");
     pthread_exit(NULL);
 }

@@ -11,10 +11,13 @@ typedef struct Mystruct {
 } Mystruct;
 
 void* print_struct(void* args) {
+    sleep(1);
+
     Mystruct* object = (Mystruct*) args;
 
     printf("integer = %d\nstring = %s\n", object->integer, object->str);
 
+    printf("Exiting joinable thread...\n");
     pthread_exit(NULL);
 }
 
@@ -39,5 +42,6 @@ int main() {
         return -2;
     }
 
+    printf("Exiting main...\n");
     pthread_exit(NULL);
 }

@@ -8,7 +8,7 @@
 
 void* print_strings_nonstop(void* args) {
     while (true) {
-        printf("right roung right round\n");
+        printf("right round right round\n");
     }
 }
 
@@ -18,7 +18,7 @@ int main() {
 
     err = pthread_create(&tid, NULL, print_strings_nonstop, NULL);
     if (err != 0) {
-        perror("Failed create");
+        printf("Failed thread create: %s\n", strerror(err));
         return -1;
     }
 
@@ -26,9 +26,23 @@ int main() {
 
     err = pthread_cancel(tid);
     if (err != 0) {
-        perror("Failed cancel");
+        printf("Failed cancelling thread: %s\n", strerror(err));
         return -3;
     }
 
-    return 0;
+    void* cancel_state;
+
+    err = pthread_join(tid, &cancel_state);
+    if (err != 0) {
+        printf("Failed to join a thread: %s\n", strerror(err));
+        return -2;
+    }
+
+    if (cancel_state == PTHREAD_CANCELED) {
+        printf("Thread was cancelled\n");
+    } else {
+        printf("Thread was not cancelled\n");
+    }
+
+    pthread_exit(NULL);
 }
