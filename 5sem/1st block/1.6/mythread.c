@@ -27,8 +27,6 @@ int start_routine_wrapper(void* args) {
     mythread_t thread = (mythread_t) args;
     thread_global = thread;
 
-    printf("New thread %p\n", thread_global);
-
     getcontext(&thread->before_start_routine);
     int jmp = setjmp(thread->env); 
     
@@ -37,6 +35,8 @@ int start_routine_wrapper(void* args) {
     }
 
     if (thread->detached) {
+        getcontext(&new_context);
+
         char* new_stack = (char*) malloc(PAGE * sizeof(char));
 
         new_context.uc_stack.ss_sp = new_stack;
@@ -45,7 +45,7 @@ int start_routine_wrapper(void* args) {
         new_context.uc_link = NULL;
 
         makecontext(&new_context, free_detached_thread, 0);
-        swapcontext(NULL, &new_context);
+        setcontext(&new_context);
     }
 
     return 0;
