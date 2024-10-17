@@ -4,6 +4,7 @@
 
 void* thread_join() {
     int ret = 42;
+    printf("Hello from join\n");
     mythread_exit((void*)(long) ret);
 }
 
@@ -26,6 +27,7 @@ int main() {
     err = mythread_join(tid_join, &retval);
     err = mythread_join(tid_cancel, &retval2);
 
+    printf("Joined\n");
     long ret = (long) retval;
     long ret2 = (long) retval2;
     printf("%ld %ld\n", ret, ret2);
