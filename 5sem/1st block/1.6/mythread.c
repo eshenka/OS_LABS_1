@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <stdbool.h>
 #include "mythread.h"
 #include <sys/mman.h>
 #include <stdio.h>
@@ -7,24 +8,46 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <setjmp.h>
+#include <threads.h>
+#include <sys/ucontext.h>
+#include <stdlib.h>
+#include <signal.h>
 
-#define STACK_SIZE 8388608
+#define STACK_SIZE 4096 * 2 * 1024
 #define PAGE 4096
 
-mythread_t thread_global;
+thread_local mythread_t thread_global;
+thread_local ucontext_t new_context;
+
+void free_detached_thread() {
+    munmap((void*) thread_global - STACK_SIZE + sizeof(mythread_struct), STACK_SIZE);
+}
 
 int start_routine_wrapper(void* args) {
     mythread_t thread = (mythread_t) args;
     thread_global = thread;
 
-    getcontext(&(thread->before_start_routine));
+    printf("New thread %p\n", thread_global);
+
+    getcontext(&thread->before_start_routine);
     int jmp = setjmp(thread->env); 
     
     if (!thread->cancelled && !jmp) {
         thread->retval = thread->start_routine(thread->args);
     }
 
-    printf("returning\n");
+    if (thread->detached) {
+        char* new_stack = (char*) malloc(PAGE * sizeof(char));
+
+        new_context.uc_stack.ss_sp = new_stack;
+        new_context.uc_stack.ss_size = PAGE;
+        new_context.uc_stack.ss_flags = 0;
+        new_context.uc_link = NULL;
+
+        makecontext(&new_context, free_detached_thread, 0);
+        swapcontext(NULL, &new_context);
+    }
+
     return 0;
 }
 
@@ -67,14 +90,12 @@ int mythread_create(mythread_t* thread,
 
     (*thread)->start_routine = start_routine;
     (*thread)->args = args;
-    // (*thread)->before_start:
     (*thread)->retval = NULL;
     (*thread)->detached = 0;
     (*thread)->cancelled = 0;
     (*thread)->finished = 1;
     (*thread)->joined = 0;
 
-    
     int err;
     err = clone(
         start_routine_wrapper,
@@ -94,10 +115,10 @@ int mythread_create(mythread_t* thread,
 }
 
 int mythread_join(mythread_t thread, void **retval) {
-    /*if (thread->detached) {*/
-    /*    printf("Cannot join detached thread");*/
-    /*    return -2;*/
-    /*}*/
+    if (thread->detached) {
+        printf("Cannot join detached thread");
+        return -2;
+    }
 
     while(thread->finished != 0) {
         usleep(1);
@@ -139,9 +160,12 @@ void mythread_testcancel() {
     setcontext(&(thread_global->before_start_routine));
 }
 
+mythread_t mythread_self() {
+    return thread_global;
+}
+
 [[noreturn]] void mythread_exit(void* retval) {
     thread_global->retval = retval;
-    printf("jumping\n");
     longjmp(thread_global->env, 1);
 }
 

@@ -35,4 +35,6 @@ void mythread_testcancel();
 
 int mythread_detach(mythread_t thread);
 
+mythread_t mythread_self(void);
+
 [[noreturn]] void mythread_exit(void* retval);
