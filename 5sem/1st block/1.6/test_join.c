@@ -5,7 +5,7 @@
 void* thread_join() {
     int ret = 42;
     printf("Hello from join\n");
-    mythread_exit((void*)(long) ret);
+    return (void*)(long) ret;
 }
 
 
