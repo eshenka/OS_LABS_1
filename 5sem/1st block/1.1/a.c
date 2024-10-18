@@ -12,18 +12,19 @@ void *mythread(void *arg) {
 }
 
 int main() {
-    printf("HELLLLOOOO\n");
-
 	pthread_t tid;
 	int err;
 
 	printf("main [%d %d %d]: Hello from main!\n", getpid(), getppid(), gettid());
 
+
+    printf("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n");
 	err = pthread_create(&tid, NULL, mythread, NULL);
 	if (err) {
 	    printf("main: pthread_create() failed: %s\n", strerror(err));
 		return -1;
 	}
+    printf("HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n");
 
     err = pthread_join(tid, NULL);
     if (err != 0) {
