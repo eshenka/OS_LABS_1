@@ -2,9 +2,9 @@
 #include "mythread.h"
 #include <unistd.h>
 
-void* thread_join() {
+void* thread_join(void *arg) {
     int ret = 42;
-    printf("Hello from join\n");
+
     return (void*)(long) ret;
 }
 

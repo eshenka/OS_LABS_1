@@ -28,10 +28,9 @@ int start_routine_wrapper(void* args) {
     thread_global = thread;
 
     getcontext(&thread->before_start_routine);
-    int jmp = setjmp(thread->env); 
-    
-    if (!thread->cancelled && !jmp) {
-        thread->retval = thread->start_routine(thread->args);
+
+    if (!(thread_global->cancelled) && !setjmp(thread_global->env)) {
+        thread_global->retval = thread_global->start_routine(thread_global->args);
     }
 
     if (thread->detached) {
@@ -168,5 +167,3 @@ mythread_t mythread_self() {
     thread_global->retval = retval;
     longjmp(thread_global->env, 1);
 }
-
-
