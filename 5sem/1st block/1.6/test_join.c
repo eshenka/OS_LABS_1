@@ -1,13 +1,12 @@
-#include <stdio.h>
 #include "mythread.h"
+#include <stdio.h>
 #include <unistd.h>
 
-void* thread_join(void *arg) {
+void *thread_join(void *arg) {
     int ret = 42;
 
-    return (void*)(long) ret;
+    return (void *)(long)ret;
 }
-
 
 int main() {
     int err;
@@ -22,14 +21,14 @@ int main() {
 
     err = mythread_create(&tid_cancel, thread_join, NULL);
 
-    void* retval;
-    void* retval2;
+    void *retval;
+    void *retval2;
     err = mythread_join(tid_join, &retval);
     err = mythread_join(tid_cancel, &retval2);
 
     printf("Joined\n");
-    long ret = (long) retval;
-    long ret2 = (long) retval2;
+    long ret = (long)retval;
+    long ret2 = (long)retval2;
     printf("%ld %ld\n", ret, ret2);
 
     return 0;
