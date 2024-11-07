@@ -31,7 +31,6 @@ queue_t *queue_init(int max_count) {
 
     pthread_mutex_init(&q->mut, NULL);
     pthread_cond_init(&q->cond, NULL);
-    q->flag = WRITE;
 
     q->first = NULL;
     q->last = NULL;
@@ -75,24 +74,11 @@ void queue_destroy(queue_t *q) {
 int queue_add(queue_t *q, int val) {
     pthread_mutex_lock(&q->mut);
 
-    while (q->flag != WRITE) {
+    while (q->count == q->max_count) {
         pthread_cond_wait(&q->cond, &q->mut);
     }
 
     q->add_attempts++;
-
-    assert(q->count <= q->max_count);
-
-    if (q->count == q->max_count) {
-        q->flag = READ;
-        pthread_cond_signal(&q->cond);
-        pthread_mutex_unlock(&q->mut);
-        return 0;
-    }
-
-    q->flag = READ;
-    pthread_cond_signal(&q->cond);
-    pthread_mutex_unlock(&q->mut);
 
     qnode_t *new = malloc(sizeof(qnode_t));
     if (!new) {
@@ -102,11 +88,6 @@ int queue_add(queue_t *q, int val) {
 
     new->val = val;
     new->next = NULL;
-
-    pthread_mutex_lock(&q->mut);
-    while (q->flag != WRITE) {
-        pthread_cond_wait(&q->cond, &q->mut);
-    }
 
     if (!q->first)
         q->first = q->last = new;
@@ -118,8 +99,10 @@ int queue_add(queue_t *q, int val) {
     q->count++;
     q->add_count++;
 
-    q->flag = READ;
-    pthread_cond_signal(&q->cond);
+    if (q->count == 1) {
+        pthread_cond_signal(&q->cond);
+    }
+
     pthread_mutex_unlock(&q->mut);
 
     return 1;
@@ -127,20 +110,11 @@ int queue_add(queue_t *q, int val) {
 
 int queue_get(queue_t *q, int *val) {
     pthread_mutex_lock(&q->mut);
-    while (q->flag != READ) {
+    while (q->count == 0) {
         pthread_cond_wait(&q->cond, &q->mut);
     }
 
     q->get_attempts++;
-
-    assert(q->count >= 0);
-
-    if (q->count == 0) {
-        q->flag = WRITE;
-        pthread_cond_signal(&q->cond);
-        pthread_mutex_unlock(&q->mut);
-        return 0;
-    }
 
     qnode_t *tmp = q->first;
 
@@ -151,8 +125,10 @@ int queue_get(queue_t *q, int *val) {
     q->count--;
     q->get_count++;
 
-    q->flag = WRITE;
-    pthread_cond_signal(&q->cond);
+    if (q->count == q->max_count - 1) {
+        pthread_cond_signal(&q->cond);
+    }
+
     pthread_mutex_unlock(&q->mut);
 
     return 1;
