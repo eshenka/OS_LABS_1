@@ -2,9 +2,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include <stdio.h>
-
-#include "queue-spinlock.h"
+#include "queue-mutex.h"
 
 void *qmonitor(void *arg) {
     queue_t *q = (queue_t *)arg;
@@ -28,7 +26,7 @@ queue_t *queue_init(int max_count) {
         abort();
     }
 
-    err = pthread_spin_init(&(q->lock), PTHREAD_PROCESS_PRIVATE);
+    pthread_mutex_init(&q->mut, NULL);
 
     q->first = NULL;
     q->last = NULL;
@@ -61,8 +59,6 @@ void queue_destroy(queue_t *q) {
         abort();
     }
 
-    pthread_spin_destroy(&(q->lock));
-
     qnode_t *cur = q->first;
     while (cur) {
         qnode_t *next = cur->next;
@@ -72,16 +68,18 @@ void queue_destroy(queue_t *q) {
 }
 
 int queue_add(queue_t *q, int val) {
-    pthread_spin_lock(&(q->lock));
+    pthread_mutex_lock(&q->mut);
 
     q->add_attempts++;
 
     assert(q->count <= q->max_count);
 
     if (q->count == q->max_count) {
-        pthread_spin_unlock(&q->lock);
+        pthread_mutex_unlock(&q->mut);
         return 0;
     }
+
+    pthread_mutex_unlock(&q->mut);
 
     qnode_t *new = malloc(sizeof(qnode_t));
     if (!new) {
@@ -91,6 +89,8 @@ int queue_add(queue_t *q, int val) {
 
     new->val = val;
     new->next = NULL;
+
+    pthread_mutex_lock(&q->mut);
 
     if (!q->first)
         q->first = q->last = new;
@@ -102,20 +102,19 @@ int queue_add(queue_t *q, int val) {
     q->count++;
     q->add_count++;
 
-    pthread_spin_unlock(&(q->lock));
+    pthread_mutex_unlock(&q->mut);
 
     return 1;
 }
 
 int queue_get(queue_t *q, int *val) {
-    pthread_spin_lock(&(q->lock));
-
+    pthread_mutex_lock(&q->mut);
     q->get_attempts++;
 
     assert(q->count >= 0);
 
     if (q->count == 0) {
-        pthread_spin_unlock(&q->lock);
+        pthread_mutex_unlock(&q->mut);
         return 0;
     }
 
@@ -128,17 +127,17 @@ int queue_get(queue_t *q, int *val) {
     q->count--;
     q->get_count++;
 
-    pthread_spin_unlock(&(q->lock));
+    pthread_mutex_unlock(&q->mut);
 
     return 1;
 }
 
 void queue_print_stats(queue_t *q) {
-    pthread_spin_lock(&(q->lock));
+    pthread_mutex_lock(&q->mut);
     printf("queue stats: current size %d; attempts: (%ld %ld %ld); counts (%ld "
            "%ld %ld)\n",
            q->count, q->add_attempts, q->get_attempts,
            q->add_attempts - q->get_attempts, q->add_count, q->get_count,
            q->add_count - q->get_count);
-    pthread_spin_unlock(&(q->lock));
+    pthread_mutex_unlock(&q->mut);
 }
