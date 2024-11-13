@@ -17,8 +17,6 @@
 #define RED "\033[41m"
 #define NOCOLOR "\033[0m"
 
-pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
-
 void set_cpu(int n) {
     int err;
     cpu_set_t cpuset;
@@ -46,11 +44,7 @@ void *reader(void *arg) {
     while (1) {
         int val = -1;
 
-        pthread_mutex_lock(&mut);
-
         int ok = queue_get(q, &val);
-
-        pthread_mutex_unlock(&mut);
 
         if (!ok)
             continue;
@@ -73,11 +67,7 @@ void *writer(void *arg) {
     set_cpu(1);
 
     while (1) {
-        pthread_mutex_lock(&mut);
-
         int ok = queue_add(q, i);
-
-        pthread_mutex_unlock(&mut);
 
         if (!ok)
             continue;

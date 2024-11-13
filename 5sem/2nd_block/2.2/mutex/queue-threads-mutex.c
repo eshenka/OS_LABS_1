@@ -42,8 +42,6 @@ void *reader(void *arg) {
     set_cpu(1);
 
     while (1) {
-        usleep(1);
-
         int val = -1;
 
         int ok = queue_get(q, &val);
@@ -66,9 +64,12 @@ void *writer(void *arg) {
     queue_t *q = (queue_t *)arg;
     printf("writer [%d %d %d]\n", getpid(), getppid(), gettid());
 
-    set_cpu(1);
+    /*set_cpu(1);*/
+    set_cpu(2);
 
     while (1) {
+        usleep(1);
+
         int ok = queue_add(q, i);
 
         if (!ok)

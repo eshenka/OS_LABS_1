@@ -68,13 +68,9 @@ void *writer(void *arg) {
     set_cpu(2);
 
     while (1) {
-        /*usleep(1);*/
-
-        pthread_mutex_lock(&mut);
+        usleep(1);
 
         int ok = queue_add(q, i);
-
-        pthread_mutex_unlock(&mut);
 
         if (!ok)
             continue;

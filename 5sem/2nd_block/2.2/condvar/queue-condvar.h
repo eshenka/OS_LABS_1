@@ -22,7 +22,8 @@ typedef struct _Queue {
     pthread_t qmonitor_tid;
 
     pthread_mutex_t mut;
-    pthread_cond_t cond;
+    pthread_cond_t cond_get;
+    pthread_cond_t cond_add;
     int flag;
 
     int count;
