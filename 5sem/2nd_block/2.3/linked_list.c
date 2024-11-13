@@ -15,6 +15,7 @@ Node* create_node() {
         int key = rand() % string_len;
         node->value[i] = string[key];
     }
+    node->value[string_len] = '\0';
 
     node->next = NULL;
     lock_init(node);
