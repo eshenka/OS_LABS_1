@@ -7,21 +7,21 @@
 
 #include "linked_list.h"
 
-#define CAPACITY 100
+/*#define CAPACITY 100*/
 
 int ascending_str_len = 0;
 int descending_str_len = 0;
 int same_str_len = 0;
 int swapped = 0;
 
-void swap(Node* parent, Node* first, Node* second) {
-    parent->next = second;
-    first->next = second->next;
-    second->next = first;
+void swap(Node* parent, Node** first, Node** second) {
+    parent->next = *second;
+    (*first)->next = (*second)->next;
+    (*second)->next = *first;
 
-    Node* tmp = first;
-    first = second;
-    second = tmp;
+    Node* tmp = *first;
+    *first = *second;
+    *second = tmp;
 }
 
 int ascend(char* str1, char* str2) { return strlen(str1) < strlen(str2); }
@@ -74,6 +74,10 @@ void* swap_thread(void* list_v) {
     while (1) {
         List* list = (List*)list_v;
 
+        if (list->first->next == NULL) {
+            printf("Oh oh\n");
+        }
+
         srand(time(NULL));
 
         Node* first = list->first;
@@ -88,7 +92,7 @@ void* swap_thread(void* list_v) {
             write_lock(third);
 
             if (rand() < (RAND_MAX / 2)) {
-                swap(first, second, third);
+                swap(first, &second, &third);
             }
 
             Node* new_third = third->next;
@@ -107,8 +111,8 @@ void* swap_thread(void* list_v) {
     }
 }
 
-int main() {
-    List* list = create_list(CAPACITY);
+int main(int argc, char* argv[]) {
+    List* list = create_list(atoi(argv[1]));
 
     pthread_t tids[6];
 
@@ -123,7 +127,7 @@ int main() {
     while (1) {
         sleep(1);
 
-        printf("%d\n%d\n%d\n%d\n", ascending_str_len, descending_str_len,
-               same_str_len, swapped);
+        printf("ascend = %d\ndescend = %d\nsame = %d\nswap = %d\n\n",
+               ascending_str_len, descending_str_len, same_str_len, swapped);
     }
 }

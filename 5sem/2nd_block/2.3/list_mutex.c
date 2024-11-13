@@ -1,3 +1,4 @@
+#include <malloc.h>
 #include <pthread.h>
 #include <stdio.h>
 
@@ -7,7 +8,10 @@ struct sync {
     pthread_mutex_t mut;
 };
 
-void lock_init(Node* node) { pthread_mutex_init(&node->lock->mut, NULL); }
+void lock_init(Node* node) {
+    node->lock = (sync_t*)malloc(sizeof(sync_t));
+    pthread_mutex_init(&(node->lock->mut), NULL);
+}
 
 void read_lock(Node* node) { pthread_mutex_lock(&node->lock->mut); }
 

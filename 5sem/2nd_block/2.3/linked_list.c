@@ -30,12 +30,15 @@ List* create_list(int len) {
     for (int i = 0; i < len; i++) {
         Node* new_node = create_node();
 
-        if (list->first != NULL) {
+        if (list->first == NULL) {
             list->first = new_node;
         } else {
             new_node->next = list->first;
             list->first = new_node;
         }
+    }
+
+    if (list->first->next == NULL) {
     }
 
     return list;
