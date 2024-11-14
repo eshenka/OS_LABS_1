@@ -1,12 +1,12 @@
 CC=gcc
 FLAGS=-Wall -g 
 LIBS=-lpthread
-TARGET_DIR=target
 
-TARGETS=mutex spin rwlock
+TARGETS=mutex spin rwlock myspin
+MYTARGETS=myspin
 COMMON=main.o linked_list.o
 
-all: $(TARGETS)
+all: $(TARGETS) $(MYTARGETS)
 	rm *.o
 
 %.o: %.c
@@ -14,6 +14,9 @@ all: $(TARGETS)
 
 $(TARGETS): %: list_%.o $(COMMON)
 	$(CC) $(FLAGS) -o $@ $< $(COMMON) $(LIBS)
+
+$(MYTARGETS): %: list_%.o %l.o $(COMMON)
+	$(CC) $(FLAGS) -o $@ $< $@l.o $(COMMON) $(LIBS)
 
 
 clean:
