@@ -9,9 +9,10 @@
 
 /*#define CAPACITY 100*/
 
-int ascending_str_len = 0;
-int descending_str_len = 0;
-int same_str_len = 0;
+/*int ascending_str_len = 0;*/
+/*int descending_str_len = 0;*/
+/*int same_str_len = 0;*/
+int compared = 0;
 int swapped = 0;
 
 void swap(Node* parent, Node** first, Node** second) {
@@ -30,7 +31,7 @@ int descend(char* str1, char* str2) { return strlen(str1) > strlen(str2); }
 
 int equal(char* str1, char* str2) { return strlen(str1) == strlen(str2); }
 
-void compare(List* list, int (*order)(char*, char*), int* cnt) {
+void compare(List* list, int (*order)(char*, char*)) {
     Node* first = list->first;
 
     read_lock(first);
@@ -49,24 +50,24 @@ void compare(List* list, int (*order)(char*, char*), int* cnt) {
 
     unlock(first);
 
-    (*cnt)++;
+    __sync_fetch_and_add(&compared, 1);
 }
 
 void* ascending_thread(void* list) {
     while (1) {
-        compare(list, ascend, &ascending_str_len);
+        compare(list, ascend);
     }
 }
 
 void* descending_thead(void* list) {
     while (1) {
-        compare(list, descend, &descending_str_len);
+        compare(list, descend);
     }
 }
 
 void* equality_thread(void* list) {
     while (1) {
-        compare(list, equal, &same_str_len);
+        compare(list, equal);
     }
 }
 
@@ -112,6 +113,10 @@ void* swap_thread(void* list_v) {
 }
 
 int main(int argc, char* argv[]) {
+    /*printf("PID = %d\n", getpid());*/
+    /**/
+    /*sleep(10);*/
+
     List* list = create_list(atoi(argv[1]));
 
     pthread_t tids[6];
@@ -127,7 +132,7 @@ int main(int argc, char* argv[]) {
     while (1) {
         sleep(1);
 
-        printf("ascend = %d\ndescend = %d\nsame = %d\nswap = %d\n\n",
-               ascending_str_len, descending_str_len, same_str_len, swapped);
+        printf("compared = %d\nswapped = %d\nrelation = %f\n\n", compared,
+               swapped, (float)compared / swapped);
     }
 }

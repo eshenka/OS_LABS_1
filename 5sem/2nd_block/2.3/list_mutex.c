@@ -10,7 +10,7 @@ struct sync {
 
 void lock_init(Node* node) {
     node->lock = (sync_t*)malloc(sizeof(sync_t));
-    pthread_mutex_init(&(node->lock->mut), NULL);
+    pthread_mutex_init(&node->lock->mut, NULL);
 }
 
 void read_lock(Node* node) { pthread_mutex_lock(&node->lock->mut); }
