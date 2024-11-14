@@ -22,3 +22,4 @@ void write_lock(Node* node);
 void unlock(Node* node);
 
 void destroy_list(List* list);
+void destroy_node(Node* node);

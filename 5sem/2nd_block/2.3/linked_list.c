@@ -43,3 +43,20 @@ List* create_list(int len) {
 
     return list;
 }
+
+void destroy_node(Node* node) {
+    free(node->lock);
+    free(node);
+}
+
+void destroy_list(List* list) {
+    Node* first = list->first;
+
+    while (first != NULL) {
+        Node* tmp = first->next;
+        destroy_node(first);
+        first = tmp;
+    }
+
+    free(list);
+}

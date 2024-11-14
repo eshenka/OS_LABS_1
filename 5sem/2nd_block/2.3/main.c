@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,11 +8,8 @@
 
 #include "linked_list.h"
 
-/*#define CAPACITY 100*/
+bool cancel = false;
 
-/*int ascending_str_len = 0;*/
-/*int descending_str_len = 0;*/
-/*int same_str_len = 0;*/
 int compared = 0;
 int swapped = 0;
 
@@ -54,25 +52,31 @@ void compare(List* list, int (*order)(char*, char*)) {
 }
 
 void* ascending_thread(void* list) {
-    while (1) {
+    while (!cancel) {
         compare(list, ascend);
     }
+
+    return NULL;
 }
 
 void* descending_thead(void* list) {
-    while (1) {
+    while (!cancel) {
         compare(list, descend);
     }
+
+    return NULL;
 }
 
 void* equality_thread(void* list) {
-    while (1) {
+    while (!cancel) {
         compare(list, equal);
     }
+
+    return NULL;
 }
 
 void* swap_thread(void* list_v) {
-    while (1) {
+    while (!cancel) {
         List* list = (List*)list_v;
 
         if (list->first->next == NULL) {
@@ -110,13 +114,11 @@ void* swap_thread(void* list_v) {
 
         __sync_fetch_and_add(&swapped, 1);
     }
+
+    return NULL;
 }
 
 int main(int argc, char* argv[]) {
-    /*printf("PID = %d\n", getpid());*/
-    /**/
-    /*sleep(10);*/
-
     List* list = create_list(atoi(argv[1]));
 
     pthread_t tids[6];
@@ -129,10 +131,18 @@ int main(int argc, char* argv[]) {
         pthread_create(&tids[i], NULL, swap_thread, list);
     }
 
-    while (1) {
-        sleep(1);
+    sleep(10);
 
-        printf("compared = %d\nswapped = %d\nrelation = %f\n\n", compared,
-               swapped, (float)compared / swapped);
+    cancel = true;
+
+    for (int i = 0; i < 6; i++) {
+        pthread_join(tids[i], NULL);
     }
+
+    printf("compared = %d\nswapped = %d\nrelation = %f\n", compared, swapped,
+           (float)compared / swapped);
+
+    destroy_list(list);
+
+    return 0;
 }
