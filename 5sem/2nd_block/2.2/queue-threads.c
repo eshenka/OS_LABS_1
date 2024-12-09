@@ -34,9 +34,9 @@ void set_cpu(int n) {
     printf("set_cpu: set cpu %d\n", n);
 }
 
-void *reader(void *arg) {
+void* reader(void* arg) {
     int expected = 0;
-    queue_t *q = (queue_t *)arg;
+    queue_t* q = (queue_t*)arg;
     printf("reader [%d %d %d]\n", getpid(), getppid(), gettid());
 
     set_cpu(1);
@@ -59,9 +59,9 @@ void *reader(void *arg) {
     return NULL;
 }
 
-void *writer(void *arg) {
+void* writer(void* arg) {
     int i = 0;
-    queue_t *q = (queue_t *)arg;
+    queue_t* q = (queue_t*)arg;
     printf("writer [%d %d %d]\n", getpid(), getppid(), gettid());
 
     set_cpu(1);
@@ -79,7 +79,7 @@ void *writer(void *arg) {
 
 int main() {
     pthread_t tid[2];
-    queue_t *q;
+    queue_t* q;
     int err;
 
     printf("main [%d %d %d]\n", getpid(), getppid(), gettid());
