@@ -24,19 +24,19 @@ typedef enum Error { SUCCESS, ERROR_HTTP_PARSE, ERROR_REQUEST_UNSUPPORT } Error;
 // Code in this function is using picohttpparser library. The way of parsing
 // with it is fully described in README on github
 Error parse_http(int client_sockfd, char* ret_client_request, char* ret_method,
-                 char* ret_url, int* minor_version) {
+                 char* ret_url, int* minor_version, size_t* buflen) {
     char client_request[BUFFER_SIZE];
     const char* method;
     const char* url;
     struct phr_header headers[100];
-    size_t buflen = 0, prevbuflen = 0, num_headers, method_len, url_len;
+    size_t prevbuflen = 0, num_headers, method_len, url_len;
     int pret;
 
     ssize_t rret;
 
     while (1) {
-        while ((rret = read(client_sockfd, client_request + buflen,
-                            sizeof(client_request) - buflen)) == -1 &&
+        while ((rret = read(client_sockfd, client_request + *buflen,
+                            sizeof(client_request) - *buflen)) == -1 &&
                errno == EINTR)
             ;
         if (rret <= 0) {
@@ -44,11 +44,11 @@ Error parse_http(int client_sockfd, char* ret_client_request, char* ret_method,
             return ERROR_HTTP_PARSE;
         }
 
-        prevbuflen = buflen;
-        buflen += rret;
+        prevbuflen = *buflen;
+        *buflen += rret;
 
         num_headers = sizeof(headers) / sizeof(headers[0]);
-        pret = phr_parse_request(client_request, buflen, &method, &method_len,
+        pret = phr_parse_request(client_request, *buflen, &method, &method_len,
                                  &url, &url_len, minor_version, headers,
                                  &num_headers, prevbuflen);
 
@@ -65,7 +65,7 @@ Error parse_http(int client_sockfd, char* ret_client_request, char* ret_method,
             return ERROR_HTTP_PARSE;
         }
 
-        if (buflen == sizeof(client_request)) {
+        if (*buflen == sizeof(client_request)) {
             printf("Closing connection. Request is too long\n");
             return ERROR_HTTP_PARSE;
         }
@@ -77,7 +77,7 @@ Error parse_http(int client_sockfd, char* ret_client_request, char* ret_method,
     }
 
     strcpy(ret_client_request, client_request);
-    ret_client_request[buflen - 1] = '\0';
+    ret_client_request[*buflen - 1] = '\0';
 
     strncpy(ret_method, method, METHOD_SIZE - 1);
     ret_method[METHOD_SIZE - 1] = '\0';
@@ -107,13 +107,14 @@ void* handle_client(void* arg) {
 
     int* client_sockfd = (int*)arg;
 
+    size_t request_len = 0;
     char client_request[BUFFER_SIZE];
     char method[METHOD_SIZE];
     char url[URL_SIZE];
     int minor_version;
 
-    err =
-        parse_http(*client_sockfd, client_request, method, url, &minor_version);
+    err = parse_http(*client_sockfd, client_request, method, url,
+                     &minor_version, &request_len);
 
     if (err == ERROR_HTTP_PARSE) {
         printf("Error occured during http parse\n");
@@ -147,16 +148,41 @@ void* handle_client(void* arg) {
 
     int con =
         connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
-    printf("%d\n", con);
 
-    write(sockfd, client_request, strlen(client_request));
+    if (con != 0) {
+        printf("Unable to connect to a remote server\n");
+        close(*client_sockfd);
+        free(client_sockfd);
+        return NULL;
+    }
+
+    printf("%s\n", client_request);
+
+    size_t written = 0;
+    while (written < request_len) {
+        written +=
+            write(sockfd, client_request + written, request_len - written);
+    }
 
     char response[BUFFER_SIZE];
 
-    printf("reading\n");
+    int response_len = 0;
+    int readd = -1;
 
-    int res = read(sockfd, response, BUFFER_SIZE);
-    printf("%d %s\n", res, response);
+    while (readd != 0) {
+        readd =
+            read(sockfd, response + response_len, BUFFER_SIZE - response_len);
+        response_len += readd;
+    }
+
+    size_t written_a = 0;
+    while (written_a < response_len) {
+        written += write(*client_sockfd, response + written_a,
+                         response_len - written_a);
+    }
+
+    /*int res = read(sockfd, response, BUFFER_SIZE);*/
+    /*printf("%d %s\n", res, response);*/
 
     /*printf("Request is successfuly parsed!\n");*/
     /*printf("It's\n");*/
