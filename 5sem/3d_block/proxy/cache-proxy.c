@@ -12,6 +12,7 @@
 #include <assert.h>
 
 #include "http-parse.h"
+#include "network.h"
 
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
@@ -66,23 +67,14 @@ void* handle_client(void* arg) {
         return NULL;
     }
 
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
     char host[URL_SIZE], path[URL_SIZE];
     sscanf(url, "http://%[^/]%s", host, path);
 
     struct hostent* server;
     server = gethostbyname(host);
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(80);
-
-    int con =
-        connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
-    if (con != 0) {
+    int server_sockfd = connect_to_remote_server(server);
+    if (server_sockfd == -1) {
         printf("Unable to connect to a remote server\n");
         close(*client_sockfd);
         free(client_sockfd);
@@ -91,15 +83,15 @@ void* handle_client(void* arg) {
 
     size_t written = 0;
     while (written < request_len) {
-        written +=
-            write(sockfd, client_request + written, request_len - written);
+        written += write(server_sockfd, client_request + written,
+                         request_len - written);
     }
 
     char response[BUFFER_SIZE];
     size_t response_len = 0;
 
-    parse_err =
-        parse_http_response(sockfd, response, BUFFER_SIZE, &response_len);
+    parse_err = parse_http_response(server_sockfd, response, BUFFER_SIZE,
+                                    &response_len);
     if (parse_err == PARSE_ERROR) {
         close(*client_sockfd);
         free(client_sockfd);
@@ -120,29 +112,11 @@ void* handle_client(void* arg) {
 int main() {
     int err;
 
-    int server_sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-    int one = 1;
-    err =
-        setsockopt(server_sockfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(PORT);
-
-    err = bind(server_sockfd, (struct sockaddr*)&server_addr,
-               sizeof(server_addr));
-    if (err == -1) {
-        close(server_sockfd);
-        printf("Error binding socket\n");
-        printf("%s\b", errno);
-        return -1;
+    int server_sockfd = create_server_socket_and_listen(PORT);
+    if (server_sockfd == -1) {
+        printf("Error starting proxy server\n");
+        return NULL;
     }
-    listen(server_sockfd, 5);
-
-    printf("Proxy server listening on port %d\n", PORT);
 
     while (1) {
         struct sockaddr_in client_addr;
