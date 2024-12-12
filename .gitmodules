@@ -1,0 +1,3 @@
+[submodule "5sem/3d_block/proxy/picohttpparser"]
+	path = 5sem/3d_block/proxy/picohttpparser
+	url = https://github.com/h2o/picohttpparser.git
