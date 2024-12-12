@@ -11,77 +11,15 @@
 
 #include <assert.h>
 
-#include "picohttpparser/picohttpparser.h"
+#include "http-parse.h"
 
-typedef enum Error { SUCCESS, ERROR_HTTP_PARSE, ERROR_REQUEST_UNSUPPORT } Error;
+typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 #define BUFFER_SIZE 8192
 #define URL_SIZE 256
 #define MAX_CACHE_SIZE 1024
 #define PORT 1080
 #define METHOD_SIZE 4
-
-// Code in this function is using picohttpparser library. The way of parsing
-// with it is fully described in README on github
-Error parse_http(int client_sockfd, char* client_request, char* ret_method,
-                 char* ret_url, int* minor_version, size_t* buflen) {
-    const char* method;
-    const char* url;
-    struct phr_header headers[100];
-    size_t prevbuflen = 0, num_headers, method_len, url_len;
-    int pret;
-
-    ssize_t rret;
-
-    while (1) {
-        while ((rret = read(client_sockfd, client_request + *buflen,
-                            BUFFER_SIZE - *buflen)) == -1 &&
-               errno == EINTR)
-            ;
-        if (rret <= 0) {
-            printf("Closing. {rret <= 0}\n");
-            return ERROR_HTTP_PARSE;
-        }
-
-        prevbuflen = *buflen;
-        *buflen += rret;
-
-        num_headers = sizeof(headers) / sizeof(headers[0]);
-        pret = phr_parse_request(client_request, *buflen, &method, &method_len,
-                                 &url, &url_len, minor_version, headers,
-                                 &num_headers, prevbuflen);
-
-        if (pret > 0) {
-            break;
-        } else if (pret == -1) {
-            printf("Closing. {pret == -1}\n");
-            return ERROR_HTTP_PARSE;
-        }
-
-        if (pret != -2) {
-            printf("Something went wrong during parsing http\n");
-            return ERROR_HTTP_PARSE;
-        }
-
-        if (*buflen == BUFFER_SIZE) {
-            printf("Closing connection. Request is too long\n");
-            return ERROR_HTTP_PARSE;
-        }
-    }
-
-    if (url_len > URL_SIZE) {
-        printf("Closing. URL is too long\n");
-        return ERROR_HTTP_PARSE;
-    }
-
-    strncpy(ret_method, method, METHOD_SIZE - 1);
-    ret_method[METHOD_SIZE - 1] = '\0';
-
-    strcpy(ret_url, url);
-    ret_url[url_len - 1] = '\0';
-
-    return SUCCESS;
-}
 
 Error check_request(char* method, int minor_version) {
     if (strcmp(method, "GET")) {
@@ -108,10 +46,12 @@ void* handle_client(void* arg) {
     char url[URL_SIZE];
     int minor_version;
 
-    err = parse_http(*client_sockfd, client_request, method, url,
-                     &minor_version, &request_len);
+    HTTP_PARSE parse_err;
+    parse_err = parse_http_request(*client_sockfd, client_request, BUFFER_SIZE,
+                                   method, METHOD_SIZE, url, URL_SIZE,
+                                   &minor_version, &request_len);
 
-    if (err == ERROR_HTTP_PARSE) {
+    if (parse_err == PARSE_ERROR) {
         printf("Error occured during http parse\n");
         close(*client_sockfd);
         free(client_sockfd);
@@ -156,40 +96,20 @@ void* handle_client(void* arg) {
     }
 
     char response[BUFFER_SIZE];
-    size_t buflen = 0, prevbuflen = 0, msg_len, num_headers;
-    const char* msg;
-    ssize_t rret;
+    size_t response_len = 0;
 
-    int readd = -1;
-
-    int minor_version_resp, status, pret;
-    struct phr_header headers[100];
-
-    while (1) {
-        while ((rret = read(sockfd, response + buflen, BUFFER_SIZE - buflen)) ==
-                   -1 &&
-               errno == EINTR)
-            ;
-        prevbuflen = buflen;
-        buflen += rret;
-        num_headers = sizeof(headers) / sizeof(headers[0]);
-
-        pret = phr_parse_response(response, buflen, &minor_version_resp,
-                                  &status, &msg, &msg_len, headers,
-                                  &num_headers, prevbuflen);
-
-        printf("%d\n", pret);
-
-        if (pret > 0) {
-            break;
-        }
+    parse_err =
+        parse_http_response(sockfd, response, BUFFER_SIZE, &response_len);
+    if (parse_err == PARSE_ERROR) {
+        close(*client_sockfd);
+        free(client_sockfd);
+        return NULL;
     }
 
-    size_t written_a = 0;
-    while (written_a < buflen) {
-        written_a +=
-            write(*client_sockfd, response + written_a, buflen - written_a);
-        printf("written %lu\n", written_a);
+    written = 0;
+    while (written < response_len) {
+        written +=
+            write(*client_sockfd, response + written, response_len - written);
     }
 
     close(*client_sockfd);
@@ -242,7 +162,7 @@ int main() {
             continue;
         }
 
-        printf("new client\n");
+        printf("New client\n");
 
         pthread_t client_thread;
         pthread_create(&client_thread, NULL, handle_client, client_sockfd);
