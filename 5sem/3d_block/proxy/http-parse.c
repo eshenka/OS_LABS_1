@@ -1,5 +1,7 @@
 #include <errno.h>
+#include <malloc.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -9,7 +11,7 @@
 // Code in this function is using picohttpparser library. The way of parsing
 // with it is fully described in README on github
 HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
-                              const int request_size, char* ret_method,
+                              int request_size, char* ret_method,
                               const int method_size, char* ret_url,
                               const int url_size, int* minor_version,
                               size_t* buflen) {
@@ -26,6 +28,7 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
                             request_size - *buflen)) == -1 &&
                errno == EINTR)
             ;
+
         if (rret <= 0) {
             printf("Closing. {rret <= 0}\n");
             return PARSE_ERROR;
@@ -38,6 +41,8 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
         pret = phr_parse_request(client_request, *buflen, &method, &method_len,
                                  &url, &url_len, minor_version, headers,
                                  &num_headers, prevbuflen);
+
+        printf("url_len = %lu\n", url_len);
 
         if (pret > 0) {
             break;
@@ -66,18 +71,23 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
     ret_method[method_size - 1] = '\0';
 
     strcpy(ret_url, url);
-    ret_url[url_len - 1] = '\0';
+    ret_url[url_len] = '\0';
+
+    printf("HTTP GET %s\n", ret_url);
 
     return PARSE_SUCCESS;
 }
 
 HTTP_PARSE parse_http_response(int server_sockfd, char* response,
-                               const int response_size, size_t* buflen) {
+                               int response_size, size_t* buflen) {
+    const int buf_size = response_size;
     const char* msg;
     struct phr_header headers[100];
     size_t prevbuflen = 0, msg_len, num_headers;
     int minor_version, status, pret;
     ssize_t rret;
+
+    int content_legth = 0;
 
     while (1) {
         while ((rret = read(server_sockfd, response + *buflen,
@@ -85,6 +95,13 @@ HTTP_PARSE parse_http_response(int server_sockfd, char* response,
                errno == EINTR)
             ;
 
+        printf("read = %lu\n", rret);
+
+        /*if (*buflen >= response_size) {*/
+        /*    realloc(response, response_size + buf_size);*/
+        /*    response_size += buf_size;*/
+        /*}*/
+        /**/
         if (rret <= 0) {
             return PARSE_ERROR;
         }
@@ -97,6 +114,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, char* response,
         pret =
             phr_parse_response(response, *buflen, &minor_version, &status, &msg,
                                &msg_len, headers, &num_headers, prevbuflen);
+        /*printf("%d\n", pret);*/
 
         if (pret > 0) {
             break;
@@ -110,10 +128,25 @@ HTTP_PARSE parse_http_response(int server_sockfd, char* response,
             return PARSE_ERROR;
         }
 
-        if (*buflen == response_size) {
+        if (*buflen >= response_size) {
             printf("Closing connection. Request is too long\n");
             return PARSE_ERROR;
         }
+    }
+
+    for (int i = 0; i < num_headers; i++) {
+        if (strncmp(headers[i].name, "Content-Length", headers[i].name_len)) {
+            continue;
+        }
+
+        content_legth = atoi(headers[i].value);
+    }
+
+    printf("content_length = %d\n", content_legth);
+
+    while (*buflen < content_legth + pret) {
+        *buflen += read(server_sockfd, response + *buflen,
+                        content_legth + pret - *buflen);
     }
 
     return PARSE_SUCCESS;

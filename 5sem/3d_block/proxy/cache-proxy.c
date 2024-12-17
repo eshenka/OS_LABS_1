@@ -16,10 +16,10 @@
 
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
-#define BUFFER_SIZE 8192
-#define URL_SIZE 256
+#define BUFFER_SIZE 8192 * 8
+#define URL_SIZE 1024
 #define MAX_CACHE_SIZE 1024
-#define PORT 1080
+#define PORT 2367
 #define METHOD_SIZE 4
 
 Error check_request(char* method, int minor_version) {
@@ -87,7 +87,7 @@ void* handle_client(void* arg) {
                          request_len - written);
     }
 
-    char response[BUFFER_SIZE];
+    char* response = (char*)malloc(sizeof(char*) * BUFFER_SIZE);
     size_t response_len = 0;
 
     parse_err = parse_http_response(server_sockfd, response, BUFFER_SIZE,
@@ -115,7 +115,7 @@ int main() {
     int server_sockfd = create_server_socket_and_listen(PORT);
     if (server_sockfd == -1) {
         printf("Error starting proxy server\n");
-        return NULL;
+        return -1;
     }
 
     while (1) {
