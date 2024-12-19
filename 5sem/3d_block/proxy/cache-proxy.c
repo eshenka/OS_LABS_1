@@ -11,6 +11,8 @@
 
 #include <assert.h>
 
+#include "cache.h"
+#include "hashmap.c/hashmap.h"
 #include "http-parse.h"
 #include "list.h"
 #include "network.h"
@@ -25,6 +27,16 @@ typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 #define PORT 2367
 #define METHOD_SIZE 4
 
+struct hashmap* cache;
+pthread_rwlock_t cache_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+typedef struct RemoteServer {
+    char* url;
+    CacheEntry* entry;
+    size_t request_len;
+    char* client_request;
+} RemoteServer;
+
 Error check_request(char* method, int minor_version) {
     if (strcmp(method, "GET")) {
         printf("Only GET method is supported\n");
@@ -37,6 +49,49 @@ Error check_request(char* method, int minor_version) {
     }
 
     return SUCCESS;
+}
+
+void* handle_remote_server(void* arg) {
+    RemoteServer* data = (RemoteServer*)arg;
+    char* url = data->url;
+    CacheEntry* entry = data->entry;
+    size_t request_len = data->request_len;
+    char* client_request = data->client_request;
+
+    char host[URL_SIZE], path[URL_SIZE];
+    sscanf(url, "http://%[^/]%s", host, path);
+
+    struct hostent* server;
+    server = gethostbyname(host);
+
+    int server_sockfd = connect_to_remote_server(server);
+    if (server_sockfd == -1) {
+        printf("Unable to connect to a remote server\n");
+        /*close(*client_sockfd);*/
+        /*free(client_sockfd);*/
+        return NULL;
+    }
+
+    size_t written = 0;
+    while (written < request_len) {
+        written += write(server_sockfd, client_request + written,
+                         request_len - written);
+    }
+
+    size_t response_len = 0;
+
+    HTTP_PARSE parse_err = parse_http_response(server_sockfd, entry->data,
+                                               BUFFER_SIZE, &response_len);
+    if (parse_err == PARSE_ERROR) {
+        /*close(*client_sockfd);*/
+        /*free(client_sockfd);*/
+        return NULL;
+    }
+
+    entry->response_len = response_len;
+    entry->done = true;
+
+    return NULL;
 }
 
 void* handle_client(void* arg) {
@@ -70,58 +125,57 @@ void* handle_client(void* arg) {
         return NULL;
     }
 
-    char host[URL_SIZE], path[URL_SIZE];
-    sscanf(url, "http://%[^/]%s", host, path);
+    CacheEntry* entry;
+    pthread_rwlock_wrlock(&cache_lock);
+    entry = hashmap_get(cache, &(CacheEntry){.url = url});
+    List* response = create_list(BUFFER_SIZE);
 
-    struct hostent* server;
-    server = gethostbyname(host);
+    if (entry == NULL) {
+        hashmap_set(cache, &(CacheEntry){.arc = 0,
+                                         .url = url,
+                                         .lock = PTHREAD_RWLOCK_INITIALIZER,
+                                         .data = create_list(BUFFER_SIZE),
+                                         .response_len = 0,
+                                         .done = false});
+        entry = hashmap_get(cache, &(CacheEntry){.url = url});
 
-    int server_sockfd = connect_to_remote_server(server);
-    if (server_sockfd == -1) {
-        printf("Unable to connect to a remote server\n");
-        close(*client_sockfd);
-        free(client_sockfd);
-        return NULL;
+        RemoteServer* remote_data = (RemoteServer*)malloc(sizeof(RemoteServer));
+        remote_data->entry = entry;
+        remote_data->request_len = request_len;
+        remote_data->client_request = client_request;
+        remote_data->url = url;
+
+        pthread_t tid;
+        pthread_create(&tid, NULL, handle_remote_server, (void*)remote_data);
+        pthread_detach(tid);
+    }
+    pthread_rwlock_unlock(&cache_lock);
+
+    while (!entry->done) {
+        usleep(100);
     }
 
     size_t written = 0;
-    while (written < request_len) {
-        written += write(server_sockfd, client_request + written,
-                         request_len - written);
-    }
+    size_t offset = entry->response_len - entry->response_len % BUFFER_SIZE;
+    List* node = entry->data;
 
-    List* response = create_list(BUFFER_SIZE);
-    size_t response_len = 0;
-
-    parse_err = parse_http_response(server_sockfd, response, BUFFER_SIZE,
-                                    &response_len);
-    if (parse_err == PARSE_ERROR) {
-        close(*client_sockfd);
-        free(client_sockfd);
-        return NULL;
-    }
-
-    written = 0;
-    size_t offset = response_len - response_len % BUFFER_SIZE;
-    List* head = response;
-
-    while (response != NULL) {
+    while (node != NULL) {
         int d = 0;
-        if (response->next == 0) {
+        if (node->next == NULL) {
             d = offset;
         }
 
-        err = write(*client_sockfd, response->buffer + written,
+        err = write(*client_sockfd, node->buffer + written,
                     BUFFER_SIZE - d - written);
         written += err;
 
         if (written >= BUFFER_SIZE) {
-            response = response->next;
+            node = node->next;
             written = 0;
         }
     }
 
-    free_list(head);
+    /*free_list(head);*/
     close(*client_sockfd);
     free(client_sockfd);
     return NULL;
@@ -135,6 +189,8 @@ int main() {
         printf("Error starting proxy server\n");
         return -1;
     }
+
+    cache = create_cache();
 
     while (1) {
         struct sockaddr_in client_addr;
