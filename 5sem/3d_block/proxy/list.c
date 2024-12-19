@@ -18,3 +18,15 @@ void add_new_node(List* last_node, size_t buf_size) {
 
     last_node->next = new_node;
 }
+
+void free_list(List* node) {
+    free(node->buffer);
+
+    if (node->next == NULL) {
+        free(node);
+        return;
+    } else {
+        free_list(node->next);
+        free(node);
+    }
+}

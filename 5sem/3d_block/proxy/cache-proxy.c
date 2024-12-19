@@ -12,12 +12,15 @@
 #include <assert.h>
 
 #include "http-parse.h"
+#include "list.h"
 #include "network.h"
 
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
-#define BUFFER_SIZE 8192 * 8
+#define BUFFER_SIZE 8192
+#define MAX_BUFFER_SIZE 8192 * 8
 #define URL_SIZE 1024
+#define MAX_URL_SIZE 1024 * 8
 #define MAX_CACHE_SIZE 1024
 #define PORT 2367
 #define METHOD_SIZE 4
@@ -87,7 +90,7 @@ void* handle_client(void* arg) {
                          request_len - written);
     }
 
-    char* response = (char*)malloc(sizeof(char*) * BUFFER_SIZE);
+    List* response = create_list(BUFFER_SIZE);
     size_t response_len = 0;
 
     parse_err = parse_http_response(server_sockfd, response, BUFFER_SIZE,
@@ -99,11 +102,26 @@ void* handle_client(void* arg) {
     }
 
     written = 0;
-    while (written < response_len) {
-        written +=
-            write(*client_sockfd, response + written, response_len - written);
+    size_t offset = response_len - response_len % BUFFER_SIZE;
+    List* head = response;
+
+    while (response != NULL) {
+        int d = 0;
+        if (response->next == 0) {
+            d = offset;
+        }
+
+        err = write(*client_sockfd, response->buffer + written,
+                    BUFFER_SIZE - d - written);
+        written += err;
+
+        if (written >= BUFFER_SIZE) {
+            response = response->next;
+            written = 0;
+        }
     }
 
+    free_list(head);
     close(*client_sockfd);
     free(client_sockfd);
     return NULL;

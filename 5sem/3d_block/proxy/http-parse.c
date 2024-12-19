@@ -3,9 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "http-parse.h"
+#include "list.h"
 #include "picohttpparser/picohttpparser.h"
 
 // Code in this function is using picohttpparser library. The way of parsing
@@ -78,43 +80,46 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
     return PARSE_SUCCESS;
 }
 
-HTTP_PARSE parse_http_response(int server_sockfd, char* response,
+HTTP_PARSE parse_http_response(int server_sockfd, List* response,
                                int response_size, size_t* buflen) {
-    const int buf_size = response_size;
     const char* msg;
     struct phr_header headers[100];
     size_t prevbuflen = 0, msg_len, num_headers;
     int minor_version, status, pret;
     ssize_t rret;
 
-    int content_legth = 0;
+    size_t chunk_size = response_size;
+    size_t chunk_len = *buflen;
+    List* node = response;
+    List* head = response;
+
+    int content_length = 0;
 
     while (1) {
-        while ((rret = read(server_sockfd, response + *buflen,
-                            response_size - *buflen)) == -1 &&
+        while ((rret = read(server_sockfd, node->buffer + chunk_len,
+                            chunk_size - chunk_len)) == -1 &&
                errno == EINTR)
             ;
 
-        printf("read = %lu\n", rret);
-
-        /*if (*buflen >= response_size) {*/
-        /*    realloc(response, response_size + buf_size);*/
-        /*    response_size += buf_size;*/
-        /*}*/
-        /**/
         if (rret <= 0) {
             return PARSE_ERROR;
         }
 
         prevbuflen = *buflen;
         *buflen += rret;
+        chunk_len += rret;
+
+        if (chunk_len == chunk_size) {
+            add_new_node(node, chunk_size);
+            node = node->next;
+            chunk_len = 0;
+        }
 
         num_headers = sizeof(headers) / sizeof(headers[0]);
 
-        pret =
-            phr_parse_response(response, *buflen, &minor_version, &status, &msg,
-                               &msg_len, headers, &num_headers, prevbuflen);
-        /*printf("%d\n", pret);*/
+        pret = phr_parse_response(head->buffer, *buflen, &minor_version,
+                                  &status, &msg, &msg_len, headers,
+                                  &num_headers, prevbuflen);
 
         if (pret > 0) {
             break;
@@ -139,14 +144,31 @@ HTTP_PARSE parse_http_response(int server_sockfd, char* response,
             continue;
         }
 
-        content_legth = atoi(headers[i].value);
+        content_length = atoi(headers[i].value);
     }
 
-    printf("content_length = %d\n", content_legth);
+    rret = 0;
+    int offset = (content_length + pret) % chunk_size;
+    while (*buflen < content_length + pret) {
+        rret = read(server_sockfd, node->buffer + chunk_len,
+                    chunk_size - chunk_len);
+        if (rret == -1) {
+            printf("Read response error\n");
+            return PARSE_ERROR;
+        }
 
-    while (*buflen < content_legth + pret) {
-        *buflen += read(server_sockfd, response + *buflen,
-                        content_legth + pret - *buflen);
+        *buflen += rret;
+        chunk_len += rret;
+
+        if (chunk_len >= chunk_size) {
+            add_new_node(node, chunk_size);
+            node = node->next;
+            chunk_len = 0;
+
+            if (content_length + pret - *buflen <= chunk_size) {
+                chunk_size = offset;
+            }
+        }
     }
 
     return PARSE_SUCCESS;
