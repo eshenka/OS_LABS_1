@@ -1,3 +1,6 @@
+#ifndef CACHE_H
+#define CACHE_H
+
 #include "hashmap.c/hashmap.h"
 #include "list.h"
 
@@ -12,6 +15,7 @@ typedef struct CacheEntry {
     int arc;
     size_t response_len;
     bool done;
+    int parts_done;
 
     pthread_rwlock_t lock;
 
@@ -35,3 +39,5 @@ int my_compare(const void* a, const void* b, void* udata);
 struct hashmap* create_cache();
 
 CacheEntry* create_entry(char* url, size_t data_size);
+
+#endif // !CACHE_H

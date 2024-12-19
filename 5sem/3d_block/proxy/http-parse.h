@@ -1,6 +1,7 @@
 #ifndef HTTP_PARSE_H
 #define HTTP_PARSE_H
 
+#include "cache.h"
 #include "list.h"
 #include <string.h>
 
@@ -16,6 +17,7 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
                               size_t* buflen);
 
 HTTP_PARSE parse_http_response(int server_sockfd, List* response,
-                               int reponse_size, size_t* buflen);
+                               int reponse_size, size_t* buflen,
+                               CacheEntry* entry);
 
 #endif // !HTTP_PARSE_H

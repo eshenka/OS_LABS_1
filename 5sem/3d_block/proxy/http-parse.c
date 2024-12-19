@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "cache.h"
 #include "http-parse.h"
 #include "list.h"
 #include "picohttpparser/picohttpparser.h"
@@ -81,7 +82,8 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
 }
 
 HTTP_PARSE parse_http_response(int server_sockfd, List* response,
-                               int response_size, size_t* buflen) {
+                               int response_size, size_t* buflen,
+                               CacheEntry* entry) {
     const char* msg;
     struct phr_header headers[100];
     size_t prevbuflen = 0, msg_len, num_headers;
@@ -110,6 +112,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
         chunk_len += rret;
 
         if (chunk_len == chunk_size) {
+            entry->parts_done += 1;
             add_new_node(node, chunk_size);
             node = node->next;
             chunk_len = 0;
@@ -161,6 +164,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
         chunk_len += rret;
 
         if (chunk_len >= chunk_size) {
+            entry->parts_done += 1;
             add_new_node(node, chunk_size);
             node = node->next;
             chunk_len = 0;
@@ -170,6 +174,9 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
             }
         }
     }
+
+    entry->parts_done += 1;
+    entry->done = true;
 
     return PARSE_SUCCESS;
 }

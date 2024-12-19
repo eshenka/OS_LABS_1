@@ -80,8 +80,8 @@ void* handle_remote_server(void* arg) {
 
     size_t response_len = 0;
 
-    HTTP_PARSE parse_err = parse_http_response(server_sockfd, entry->data,
-                                               BUFFER_SIZE, &response_len);
+    HTTP_PARSE parse_err = parse_http_response(
+        server_sockfd, entry->data, BUFFER_SIZE, &response_len, entry);
     if (parse_err == PARSE_ERROR) {
         /*close(*client_sockfd);*/
         /*free(client_sockfd);*/
@@ -89,7 +89,7 @@ void* handle_remote_server(void* arg) {
     }
 
     entry->response_len = response_len;
-    entry->done = true;
+    /*entry->done = true;*/
 
     return NULL;
 }
@@ -136,7 +136,8 @@ void* handle_client(void* arg) {
                                          .lock = PTHREAD_RWLOCK_INITIALIZER,
                                          .data = create_list(BUFFER_SIZE),
                                          .response_len = 0,
-                                         .done = false});
+                                         .done = false,
+                                         .parts_done = 0});
         entry = hashmap_get(cache, &(CacheEntry){.url = url});
 
         RemoteServer* remote_data = (RemoteServer*)malloc(sizeof(RemoteServer));
@@ -158,11 +159,16 @@ void* handle_client(void* arg) {
     size_t written = 0;
     size_t offset = entry->response_len - entry->response_len % BUFFER_SIZE;
     List* node = entry->data;
+    int parts_read = 0;
 
     while (node != NULL) {
+        while (parts_read == entry->parts_done) {
+            usleep(100);
+        }
+
         int d = 0;
-        if (node->next == NULL) {
-            d = offset;
+        if (node->next == NULL && entry->done) {
+            d = entry->response_len - entry->response_len % BUFFER_SIZE;
         }
 
         err = write(*client_sockfd, node->buffer + written,
@@ -170,6 +176,7 @@ void* handle_client(void* arg) {
         written += err;
 
         if (written >= BUFFER_SIZE) {
+            parts_read++;
             node = node->next;
             written = 0;
         }
