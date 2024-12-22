@@ -17,12 +17,15 @@ CacheEntry* create_entry(char* url, size_t buf_size) {
 
 uint64_t my_hash(const void* item, uint64_t seed0, uint64_t seed1) {
     const struct CacheEntry* entry = (CacheEntry*)item;
+    /*printf("\n\n\nmy_hash= %s\n\n\n", entry->url);*/
     return hashmap_sip(entry->url, strlen(entry->url), seed0, seed1);
 }
 
 int my_compare(const void* a, const void* b, void* udata) {
     const struct CacheEntry* entry_a = (CacheEntry*)a;
     const struct CacheEntry* entry_b = (CacheEntry*)b;
+
+    /*printf("\n\n\nmy compare\n%s\n%s\n\n\n", entry_a->url, entry_b->url);*/
 
     return strcmp(entry_a->url, entry_b->url);
 }

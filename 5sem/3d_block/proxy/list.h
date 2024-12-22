@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 typedef struct List {
+    int buf_len;
     char* buffer;
     struct List* next;
 } List;

@@ -18,6 +18,7 @@ typedef struct CacheEntry {
     int parts_done;
 
     pthread_rwlock_t lock;
+    pthread_cond_t new_part;
 
 } CacheEntry;
 

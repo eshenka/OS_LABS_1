@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <malloc.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,9 +82,8 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
     return PARSE_SUCCESS;
 }
 
-HTTP_PARSE parse_http_response(int server_sockfd, List* response,
-                               int response_size, size_t* buflen,
-                               CacheEntry* entry) {
+HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
+                               size_t* buflen, CacheEntry* entry) {
     const char* msg;
     struct phr_header headers[100];
     size_t prevbuflen = 0, msg_len, num_headers;
@@ -92,13 +92,15 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
 
     size_t chunk_size = response_size;
     size_t chunk_len = *buflen;
-    List* node = response;
-    List* head = response;
+    List* node = entry->data;
+    List* head = entry->data;
 
     int content_length = 0;
 
+    char buffer[chunk_size];
+
     while (1) {
-        while ((rret = read(server_sockfd, node->buffer + chunk_len,
+        while ((rret = read(server_sockfd, buffer + chunk_len,
                             chunk_size - chunk_len)) == -1 &&
                errno == EINTR)
             ;
@@ -112,19 +114,37 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
         chunk_len += rret;
 
         if (chunk_len == chunk_size) {
+            pthread_rwlock_wrlock(&entry->lock);
+
+            /*printf("\n\n\n%s\n\n\n", buffer);*/
+
+            strncpy(node->buffer, buffer, chunk_len);
+            node->buf_len = chunk_len;
             entry->parts_done += 1;
+
             add_new_node(node, chunk_size);
             node = node->next;
+
+            pthread_rwlock_unlock(&entry->lock);
             chunk_len = 0;
         }
 
         num_headers = sizeof(headers) / sizeof(headers[0]);
 
-        pret = phr_parse_response(head->buffer, *buflen, &minor_version,
-                                  &status, &msg, &msg_len, headers,
-                                  &num_headers, prevbuflen);
+        pret =
+            phr_parse_response(buffer, *buflen, &minor_version, &status, &msg,
+                               &msg_len, headers, &num_headers, prevbuflen);
 
         if (pret > 0) {
+
+            /*printf("\n\n\n%.*s\n\n\n", chunk_len, buffer);*/
+
+            pthread_rwlock_wrlock(&entry->lock);
+
+            strncpy(node->buffer, buffer, chunk_len);
+            node->buf_len = chunk_len;
+
+            pthread_rwlock_unlock(&entry->lock);
             break;
         } else if (pret == -1) {
             printf("Closing. {pret == -1}\n");
@@ -150,11 +170,16 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
         content_length = atoi(headers[i].value);
     }
 
+    if (content_length == 0) {
+        printf("\n\n\nHAHAHHAHAHAHAHAH\n\n\n");
+    }
+
+    /*printf("\n\n\n%.*s\n\n\n", chunk_len, buffer);*/
+
     rret = 0;
     int offset = (content_length + pret) % chunk_size;
     while (*buflen < content_length + pret) {
-        rret = read(server_sockfd, node->buffer + chunk_len,
-                    chunk_size - chunk_len);
+        rret = read(server_sockfd, buffer + chunk_len, chunk_size - chunk_len);
         if (rret == -1) {
             printf("Read response error\n");
             return PARSE_ERROR;
@@ -164,19 +189,33 @@ HTTP_PARSE parse_http_response(int server_sockfd, List* response,
         chunk_len += rret;
 
         if (chunk_len >= chunk_size) {
-            entry->parts_done += 1;
+            pthread_rwlock_wrlock(&entry->lock);
+
+            strncpy(node->buffer, buffer, chunk_len);
+            __sync_fetch_and_add(&entry->parts_done, 1);
+            node->buf_len = chunk_len;
+
             add_new_node(node, chunk_size);
             node = node->next;
-            chunk_len = 0;
 
+            pthread_rwlock_unlock(&entry->lock);
+
+            chunk_len = 0;
             if (content_length + pret - *buflen <= chunk_size) {
                 chunk_size = offset;
             }
         }
     }
 
+    pthread_rwlock_wrlock(&entry->lock);
+
     entry->parts_done += 1;
     entry->done = true;
+    __sync_fetch_and_add(&entry->parts_done, 1);
+
+    pthread_rwlock_unlock(&entry->lock);
+
+    /*printf("\n\n\n%s\n\n\n", entry->data->buffer);*/
 
     return PARSE_SUCCESS;
 }

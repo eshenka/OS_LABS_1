@@ -16,8 +16,7 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
                               const int url_size, int* minor_version,
                               size_t* buflen);
 
-HTTP_PARSE parse_http_response(int server_sockfd, List* response,
-                               int reponse_size, size_t* buflen,
-                               CacheEntry* entry);
+HTTP_PARSE parse_http_response(int server_sockfd, int reponse_size,
+                               size_t* buflen, CacheEntry* entry);
 
 #endif // !HTTP_PARSE_H

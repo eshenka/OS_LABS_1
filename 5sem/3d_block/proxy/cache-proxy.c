@@ -80,8 +80,8 @@ void* handle_remote_server(void* arg) {
 
     size_t response_len = 0;
 
-    HTTP_PARSE parse_err = parse_http_response(
-        server_sockfd, entry->data, BUFFER_SIZE, &response_len, entry);
+    HTTP_PARSE parse_err =
+        parse_http_response(server_sockfd, BUFFER_SIZE, &response_len, entry);
     if (parse_err == PARSE_ERROR) {
         /*close(*client_sockfd);*/
         /*free(client_sockfd);*/
@@ -160,27 +160,26 @@ void* handle_client(void* arg) {
     size_t offset = entry->response_len - entry->response_len % BUFFER_SIZE;
     List* node = entry->data;
     int parts_read = 0;
+    int amount_to_read = 0;
+
+    printf("\nstart\n");
 
     while (node != NULL) {
-        while (parts_read == entry->parts_done) {
-            usleep(100);
-        }
-
-        int d = 0;
-        if (node->next == NULL && entry->done) {
-            d = entry->response_len - entry->response_len % BUFFER_SIZE;
-        }
-
+        amount_to_read = node->buf_len;
         err = write(*client_sockfd, node->buffer + written,
-                    BUFFER_SIZE - d - written);
+                    amount_to_read - written);
         written += err;
+        printf("%lu\n", amount_to_read - written);
 
-        if (written >= BUFFER_SIZE) {
+        if (written >= amount_to_read) {
             parts_read++;
             node = node->next;
             written = 0;
         }
     }
+    printf("\nend\n");
+
+    printf("\nentry = %s\n", entry->url);
 
     /*free_list(head);*/
     close(*client_sockfd);
