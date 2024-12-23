@@ -38,9 +38,10 @@ int my_compare(const void* a, const void* b, void* udata);
 struct hashmap* create_cache();
 
 CacheEntry* create_entry(char* url, size_t data_size);
+void free_entry(CacheEntry* entry);
 
-void add_entry(LRUQueue* queue, CacheEntry* entry);
-void upd_entry(LRUQueue* queue, CacheEntry* entry);
-CacheEntry* del_entry(LRUQueue* queue);
+void add_entry(LRUQueue** queue, CacheEntry* entry);
+void upd_entry(LRUQueue** queue, CacheEntry* entry);
+CacheEntry* del_entry(LRUQueue** queue);
 
 #endif // !CACHE_H

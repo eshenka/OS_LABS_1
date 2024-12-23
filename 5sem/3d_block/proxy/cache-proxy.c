@@ -23,12 +23,14 @@ typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 #define MAX_BUFFER_SIZE 8192 * 8
 #define URL_SIZE 1024
 #define MAX_URL_SIZE 1024 * 8
-#define MAX_CACHE_SIZE 1024
+#define MAX_CACHE_SIZE 5
 #define PORT 2367
 #define METHOD_SIZE 4
 
 struct hashmap* cache;
+LRUQueue* queue_head;
 pthread_rwlock_t cache_lock = PTHREAD_RWLOCK_INITIALIZER;
+size_t cache_size;
 
 typedef struct RemoteServer {
     char* url;
@@ -69,6 +71,9 @@ void* handle_remote_server(void* arg) {
     size_t request_len = data->request_len;
     char* client_request = data->client_request;
 
+    // Server thread has a ref to entry
+    __sync_fetch_and_add(&entry->arc, 1);
+
     char host[URL_SIZE], path[URL_SIZE];
     sscanf(url, "http://%[^/]%s", host, path);
 
@@ -77,12 +82,17 @@ void* handle_remote_server(void* arg) {
 
     int server_sockfd = connect_to_remote_server(server);
     if (server_sockfd == -1) {
+        int arc = __sync_fetch_and_sub(&entry->arc, 1);
         printf("Unable to connect to a remote server\n");
         free(data);
+
+        if (arc == 1) {
+            printf("Remote server freeing entry\n");
+            free_entry(entry);
+        }
+
         return NULL;
     }
-
-    printf("Client in remote server %d\n", server_sockfd);
 
     size_t written = 0;
     while (written < request_len) {
@@ -95,12 +105,27 @@ void* handle_remote_server(void* arg) {
     HTTP_PARSE parse_err =
         parse_http_response(server_sockfd, BUFFER_SIZE, &response_len, entry);
     if (parse_err == PARSE_ERROR) {
+        int arc = __sync_fetch_and_sub(&entry->arc, 1);
         free(data);
+
+        if (arc == 1) {
+            printf("Remote server freeing entry\n");
+            free_entry(entry);
+        }
+
         close(server_sockfd);
         return NULL;
     }
 
+    pthread_rwlock_wrlock(&entry->lock);
     entry->response_len = response_len;
+    int arc = __sync_fetch_and_sub(&entry->arc, 1);
+    pthread_rwlock_unlock(&entry->lock);
+
+    if (arc == 1) {
+        printf("Remote server freeing entry\n");
+        free_entry(entry);
+    }
     free(data);
     return NULL;
 }
@@ -141,9 +166,28 @@ void* handle_client(void* arg) {
 
     if (entry == NULL) {
         entry = create_entry(url, BUFFER_SIZE);
+
+        if (cache_size == MAX_CACHE_SIZE) {
+            CacheEntry* removed_entry = del_entry(&queue_head);
+            hashmap_delete(cache, &(CacheEntry){.url = url});
+
+            int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
+            if (arc == 1) {
+                printf("Cache freeing entry\n");
+                free_entry(removed_entry);
+            }
+
+            cache_size--;
+        }
+
         hashmap_set(cache, entry);
+        cache_size++;
         free(entry);
         entry = hashmap_get(cache, &(CacheEntry){.url = url});
+
+        add_entry(&queue_head, entry);
+
+        __sync_fetch_and_add(&entry->arc, 2);
 
         RemoteServer* remote_data =
             create_remote_data(entry, request_len, url, client_request);
@@ -152,6 +196,8 @@ void* handle_client(void* arg) {
         pthread_create(&tid, NULL, handle_remote_server, (void*)remote_data);
         pthread_detach(tid);
     } else {
+        __sync_fetch_and_add(&entry->arc, 1);
+        upd_entry(&queue_head, entry);
         printf("Reading entry from cache %p\n", entry);
     }
     pthread_rwlock_unlock(&cache_lock);
@@ -174,9 +220,9 @@ void* handle_client(void* arg) {
         amount_to_read = node->buf_len;
         err = write(*client_sockfd, node->buffer + written,
                     amount_to_read - written);
-        if (err == -1) {
-            printf("[ERROR] Error during writing response to client\n");
-        }
+        /*if (err == -1) {*/
+        /*    printf("[ERROR] Error during writing response to client\n");*/
+        /*}*/
         written += err;
 
         if (written >= amount_to_read) {
@@ -195,7 +241,16 @@ void* handle_client(void* arg) {
             }
         }
     }
+
     printf("\nend\n");
+
+    // Client thread exits, so it won't have a ref to entry
+    int arc = __sync_fetch_and_sub(&entry->arc, 1);
+    if (arc == 1) {
+        printf("Client thread freeing entry\n");
+        free_entry(entry);
+    }
+
     close(*client_sockfd);
     free(client_sockfd);
     return NULL;
@@ -211,6 +266,8 @@ int main() {
     }
 
     cache = create_cache();
+    cache_size = 0;
+    queue_head = NULL;
 
     while (1) {
         struct sockaddr_in client_addr;
@@ -219,8 +276,6 @@ int main() {
         int* client_sockfd = (int*)malloc(sizeof(int));
         *client_sockfd =
             accept(server_sockfd, (struct sockaddr*)&client_addr, &client_len);
-
-        printf("Client in main %d\n", *client_sockfd);
 
         if (*client_sockfd < 0) {
             if (errno == EINTR) {
