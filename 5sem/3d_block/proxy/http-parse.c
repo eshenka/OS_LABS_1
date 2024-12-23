@@ -71,10 +71,10 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
         return PARSE_ERROR;
     }
 
-    strncpy(ret_method, method, method_size - 1);
+    memcpy(ret_method, method, method_size - 1);
     ret_method[method_size - 1] = '\0';
 
-    strcpy(ret_url, url);
+    memcpy(ret_url, url, url_len);
     ret_url[url_len] = '\0';
 
     printf("HTTP GET %s\n", ret_url);
@@ -116,7 +116,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
         if (chunk_len == chunk_size) {
             pthread_rwlock_wrlock(&entry->lock);
 
-            strncpy(node->buffer, buffer, chunk_len);
+            memcpy(node->buffer, buffer, chunk_len);
             node->buf_len = chunk_len;
             entry->parts_done += 1;
 
@@ -137,7 +137,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
         if (pret > 0) {
             pthread_rwlock_wrlock(&entry->lock);
 
-            strncpy(node->buffer, buffer, chunk_len);
+            memcpy(node->buffer, buffer, chunk_len);
             node->buf_len = chunk_len;
 
             pthread_rwlock_unlock(&entry->lock);
@@ -185,7 +185,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
         if (chunk_len >= chunk_size) {
             pthread_rwlock_wrlock(&entry->lock);
 
-            strncpy(node->buffer, buffer, chunk_len);
+            memcpy(node->buffer, buffer, chunk_len);
             /*printf("parts done before %d\n", entry->parts_done);*/
             __sync_fetch_and_add(&entry->parts_done, 1);
             /*printf("parts done after %d\n", entry->parts_done);*/
