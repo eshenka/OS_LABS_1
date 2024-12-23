@@ -28,24 +28,32 @@ void free_entry(CacheEntry* entry) {
     pthread_cond_destroy(&entry->new_part);
     pthread_mutex_destroy(&entry->wait_lock);
 
-    /*printf("freeing entry %p\n", entry);*/
-    /*free(entry);*/
+    printf("freeing entry %p\n", entry);
+    free(entry);
+}
+
+HashValue* create_value(CacheEntry* entry) {
+    HashValue* value = (HashValue*)malloc(sizeof(HashValue));
+    value->url = entry->url;
+    value->entry = entry;
+
+    return value;
 }
 
 uint64_t my_hash(const void* item, uint64_t seed0, uint64_t seed1) {
-    const struct CacheEntry* entry = (CacheEntry*)item;
-    return hashmap_sip(entry->url, strlen(entry->url), seed0, seed1);
+    const struct HashValue* value = (HashValue*)item;
+    return hashmap_sip(value->url, strlen(value->url), seed0, seed1);
 }
 
 int my_compare(const void* a, const void* b, void* udata) {
-    const struct CacheEntry* entry_a = (CacheEntry*)a;
-    const struct CacheEntry* entry_b = (CacheEntry*)b;
+    const struct HashValue* value_a = (HashValue*)a;
+    const struct HashValue* value_b = (HashValue*)b;
 
-    return strcmp(entry_a->url, entry_b->url);
+    return strcmp(value_a->url, value_b->url);
 }
 
 struct hashmap* create_cache() {
-    struct hashmap* map = hashmap_new(sizeof(CacheEntry), 0, 0, 0, my_hash,
+    struct hashmap* map = hashmap_new(sizeof(HashValue), 0, 0, 0, my_hash,
                                       my_compare, NULL, NULL);
 
     return map;

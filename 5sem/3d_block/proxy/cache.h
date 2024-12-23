@@ -25,6 +25,11 @@ typedef struct CacheEntry {
 
 } CacheEntry;
 
+typedef struct HashValue {
+    char* url;
+    CacheEntry* entry;
+} HashValue;
+
 typedef struct LRUQueue {
     struct LRUQueue* prev;
     struct LRUQueue* next;
@@ -39,6 +44,8 @@ struct hashmap* create_cache();
 
 CacheEntry* create_entry(char* url, size_t data_size);
 void free_entry(CacheEntry* entry);
+
+HashValue* create_value(CacheEntry* entry);
 
 void add_entry(LRUQueue** queue, CacheEntry* entry);
 void upd_entry(LRUQueue** queue, CacheEntry* entry);

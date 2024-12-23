@@ -162,22 +162,16 @@ void* handle_client(void* arg) {
     }
 
     pthread_rwlock_wrlock(&cache_lock);
-    CacheEntry* entry = hashmap_get(cache, &(CacheEntry){.url = url});
+    HashValue* value = hashmap_get(cache, &(HashValue){.url = url});
 
-    if (entry == NULL) {
-        entry = create_entry(url, BUFFER_SIZE);
+    if (value == NULL) {
+        CacheEntry* entry = create_entry(url, BUFFER_SIZE);
+
+        value = &(HashValue){.url = url, .entry = entry};
 
         if (cache_size == MAX_CACHE_SIZE) {
             CacheEntry* removed_entry = del_entry(&queue_head);
             hashmap_delete(cache, &(CacheEntry){.url = removed_entry->url});
-
-            CacheEntry* test =
-                hashmap_get(cache, &(CacheEntry){.url = removed_entry->url});
-            if (test != NULL) {
-                printf("QUESTIONS\n");
-            } else {
-                printf("NO QUESTIONS\n");
-            }
 
             int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
             if (arc == 1) {
@@ -188,10 +182,8 @@ void* handle_client(void* arg) {
             cache_size--;
         }
 
-        hashmap_set(cache, entry);
+        hashmap_set(cache, value);
         cache_size++;
-        free(entry);
-        entry = hashmap_get(cache, &(CacheEntry){.url = url});
 
         add_entry(&queue_head, entry);
 
@@ -204,23 +196,24 @@ void* handle_client(void* arg) {
         pthread_create(&tid, NULL, handle_remote_server, (void*)remote_data);
         pthread_detach(tid);
     } else {
-        __sync_fetch_and_add(&entry->arc, 1);
-        upd_entry(&queue_head, entry);
-        printf("Reading entry from cache %p\n", entry);
+        __sync_fetch_and_add(&value->entry->arc, 1);
+        upd_entry(&queue_head, value->entry);
+        printf("Reading entry from cache %p\n", value->entry);
     }
     pthread_rwlock_unlock(&cache_lock);
 
     size_t written = 0;
-    size_t offset = entry->response_len - entry->response_len % BUFFER_SIZE;
-    List* node = entry->data;
+    size_t offset =
+        value->entry->response_len - value->entry->response_len % BUFFER_SIZE;
+    List* node = value->entry->data;
     int parts_read = 0;
     int amount_to_read = 0;
 
-    pthread_mutex_lock(&entry->wait_lock);
-    while (entry->parts_done == 0 && !entry->done) {
-        pthread_cond_wait(&entry->new_part, &entry->wait_lock);
+    pthread_mutex_lock(&value->entry->wait_lock);
+    while (value->entry->parts_done == 0 && !value->entry->done) {
+        pthread_cond_wait(&value->entry->new_part, &value->entry->wait_lock);
     }
-    pthread_mutex_unlock(&entry->wait_lock);
+    pthread_mutex_unlock(&value->entry->wait_lock);
 
     printf("start start\n");
 
@@ -237,15 +230,17 @@ void* handle_client(void* arg) {
             parts_read++;
             written = 0;
 
-            if (entry->done) {
+            if (value->entry->done) {
                 node = node->next;
             } else {
-                pthread_mutex_lock(&entry->wait_lock);
-                while (parts_read == entry->parts_done && !entry->done) {
-                    pthread_cond_wait(&entry->new_part, &entry->wait_lock);
+                pthread_mutex_lock(&value->entry->wait_lock);
+                while (parts_read == value->entry->parts_done &&
+                       !value->entry->done) {
+                    pthread_cond_wait(&value->entry->new_part,
+                                      &value->entry->wait_lock);
                 }
                 node = node->next;
-                pthread_mutex_unlock(&entry->wait_lock);
+                pthread_mutex_unlock(&value->entry->wait_lock);
             }
         }
     }
@@ -253,10 +248,10 @@ void* handle_client(void* arg) {
     printf("\nend\n");
 
     // Client thread exits, so it won't have a ref to entry
-    int arc = __sync_fetch_and_sub(&entry->arc, 1);
+    int arc = __sync_fetch_and_sub(&value->entry->arc, 1);
     if (arc == 1) {
         printf("Client thread freeing entry\n");
-        free_entry(entry);
+        free_entry(value->entry);
     }
 
     close(*client_sockfd);
