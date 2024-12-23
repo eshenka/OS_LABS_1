@@ -169,7 +169,7 @@ void* handle_client(void* arg) {
 
         if (cache_size == MAX_CACHE_SIZE) {
             CacheEntry* removed_entry = del_entry(&queue_head);
-            hashmap_delete(cache, &(CacheEntry){.url = url});
+            hashmap_delete(cache, &(CacheEntry){.url = removed_entry->url});
 
             int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
             if (arc == 1) {
