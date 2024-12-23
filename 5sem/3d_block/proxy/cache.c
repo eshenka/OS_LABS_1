@@ -33,3 +33,49 @@ struct hashmap* create_cache() {
 
     return map;
 }
+
+void add_entry(LRUQueue* queue, CacheEntry* entry) {
+    if (queue == NULL) {
+        queue = (LRUQueue*)malloc(sizeof(LRUQueue));
+        queue->prev = NULL;
+        queue->next = NULL;
+        queue->entry = entry;
+        entry->queue_node = queue;
+        return;
+    }
+
+    LRUQueue* queue_new = (LRUQueue*)malloc(sizeof(LRUQueue));
+    queue->prev = queue_new;
+    queue_new->next = queue;
+    queue_new->prev = NULL;
+
+    queue_new->entry = entry;
+    entry->queue_node = queue_new;
+
+    queue = queue_new;
+}
+
+void upd_entry(LRUQueue* queue, CacheEntry* entry) {
+    entry->queue_node->prev->next = entry->queue_node->next;
+    entry->queue_node->next->prev = entry->queue_node->prev;
+
+    queue->prev = entry->queue_node;
+    entry->queue_node->next = queue;
+    entry->queue_node->prev = NULL;
+
+    queue = entry->queue_node;
+}
+
+CacheEntry* del_entry(LRUQueue* queue) {
+    LRUQueue* node = queue;
+    while (node->next != NULL) {
+        node = node->next;
+    }
+
+    CacheEntry* entry = node->entry;
+
+    node->prev->next = NULL;
+    free(node);
+
+    return entry;
+}
