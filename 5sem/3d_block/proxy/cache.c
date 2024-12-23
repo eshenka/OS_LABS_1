@@ -6,11 +6,15 @@
 
 CacheEntry* create_entry(char* url, size_t buf_size) {
     CacheEntry* entry = (CacheEntry*)malloc(sizeof(CacheEntry));
-
-    pthread_rwlock_init(&entry->lock, NULL);
     entry->data = create_list(buf_size);
     entry->url = url;
+    pthread_rwlock_init(&entry->lock, NULL);
+    pthread_cond_init(&entry->new_part, NULL);
+    pthread_mutex_init(&entry->wait_lock, NULL);
     entry->arc = 0;
+    entry->response_len = 0;
+    entry->done = false;
+    entry->parts_done = 0;
 
     return entry;
 }

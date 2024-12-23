@@ -37,6 +37,17 @@ typedef struct RemoteServer {
     char* client_request;
 } RemoteServer;
 
+RemoteServer* create_remote_data(CacheEntry* entry, size_t request_len,
+                                 char* url, char* client_request) {
+    RemoteServer* remote_data = (RemoteServer*)malloc(sizeof(RemoteServer));
+    remote_data->url = url;
+    remote_data->entry = entry;
+    remote_data->client_request = client_request;
+    remote_data->request_len = request_len;
+
+    return remote_data;
+}
+
 Error check_request(char* method, int minor_version) {
     if (strcmp(method, "GET")) {
         printf("Only GET method is supported\n");
@@ -67,10 +78,11 @@ void* handle_remote_server(void* arg) {
     int server_sockfd = connect_to_remote_server(server);
     if (server_sockfd == -1) {
         printf("Unable to connect to a remote server\n");
-        /*close(*client_sockfd);*/
-        /*free(client_sockfd);*/
+        free(data);
         return NULL;
     }
+
+    printf("Client in remote server %d\n", server_sockfd);
 
     size_t written = 0;
     while (written < request_len) {
@@ -83,14 +95,13 @@ void* handle_remote_server(void* arg) {
     HTTP_PARSE parse_err =
         parse_http_response(server_sockfd, BUFFER_SIZE, &response_len, entry);
     if (parse_err == PARSE_ERROR) {
-        /*close(*client_sockfd);*/
-        /*free(client_sockfd);*/
+        free(data);
+        close(server_sockfd);
         return NULL;
     }
 
     entry->response_len = response_len;
-    /*entry->done = true;*/
-
+    free(data);
     return NULL;
 }
 
@@ -102,7 +113,6 @@ void* handle_client(void* arg) {
     size_t request_len = 0;
     char client_request[BUFFER_SIZE];
     char method[METHOD_SIZE];
-    /*char url[URL_SIZE];*/
     char* url = (char*)malloc(sizeof(char) * URL_SIZE);
     int minor_version;
 
@@ -130,30 +140,19 @@ void* handle_client(void* arg) {
     CacheEntry* entry = hashmap_get(cache, &(CacheEntry){.url = url});
 
     if (entry == NULL) {
-        entry = (CacheEntry*)malloc(sizeof(CacheEntry));
-        entry->data = create_list(BUFFER_SIZE);
-        entry->url = url;
-        pthread_rwlock_init(&entry->lock, NULL);
-        pthread_cond_init(&entry->new_part, NULL);
-        pthread_mutex_init(&entry->wait_lock, NULL);
-        entry->arc = 0;
-        entry->response_len = 0;
-        entry->done = false;
-        entry->parts_done = 0;
+        entry = create_entry(url, BUFFER_SIZE);
         hashmap_set(cache, entry);
+        free(entry);
         entry = hashmap_get(cache, &(CacheEntry){.url = url});
 
-        RemoteServer* remote_data = (RemoteServer*)malloc(sizeof(RemoteServer));
-        remote_data->entry = entry;
-        remote_data->request_len = request_len;
-        remote_data->client_request = client_request;
-        remote_data->url = url;
+        RemoteServer* remote_data =
+            create_remote_data(entry, request_len, url, client_request);
 
         pthread_t tid;
         pthread_create(&tid, NULL, handle_remote_server, (void*)remote_data);
         pthread_detach(tid);
     } else {
-        printf("FROM CACHE %p\n", entry);
+        printf("Reading entry from cache %p\n", entry);
     }
     pthread_rwlock_unlock(&cache_lock);
 
@@ -163,15 +162,8 @@ void* handle_client(void* arg) {
     int parts_read = 0;
     int amount_to_read = 0;
 
-    printf("\nstart\n");
-
-    /*while (!entry->done) {*/
-    /*    usleep(100);*/
-    /*}*/
-
     pthread_mutex_lock(&entry->wait_lock);
-    while (entry->parts_done == 0) {
-        printf("im chillin\n");
+    while (entry->parts_done == 0 && !entry->done) {
         pthread_cond_wait(&entry->new_part, &entry->wait_lock);
     }
     pthread_mutex_unlock(&entry->wait_lock);
@@ -182,6 +174,9 @@ void* handle_client(void* arg) {
         amount_to_read = node->buf_len;
         err = write(*client_sockfd, node->buffer + written,
                     amount_to_read - written);
+        if (err == -1) {
+            printf("[ERROR] Error during writing response to client\n");
+        }
         written += err;
 
         if (written >= amount_to_read) {
@@ -193,30 +188,14 @@ void* handle_client(void* arg) {
             } else {
                 pthread_mutex_lock(&entry->wait_lock);
                 while (parts_read == entry->parts_done && !entry->done) {
-                    printf("im chillin\n");
                     pthread_cond_wait(&entry->new_part, &entry->wait_lock);
                 }
                 node = node->next;
                 pthread_mutex_unlock(&entry->wait_lock);
             }
         }
-
-        /*if (entry->done) {*/
-        /*    node = node->next;*/
-        /*} else {*/
-        /*    pthread_mutex_lock(&entry->wait_lock);*/
-        /*    while (parts_read == entry->parts_done) {*/
-        /*        pthread_cond_wait(&entry->new_part, &entry->wait_lock);*/
-        /*    }*/
-        /*    node = node->next;*/
-        /*    pthread_mutex_unlock(&entry->wait_lock);*/
-        /*}*/
     }
     printf("\nend\n");
-
-    printf("\nentry = %p\n", entry);
-
-    /*free_list(head);*/
     close(*client_sockfd);
     free(client_sockfd);
     return NULL;
@@ -240,6 +219,8 @@ int main() {
         int* client_sockfd = (int*)malloc(sizeof(int));
         *client_sockfd =
             accept(server_sockfd, (struct sockaddr*)&client_addr, &client_len);
+
+        printf("Client in main %d\n", *client_sockfd);
 
         if (*client_sockfd < 0) {
             if (errno == EINTR) {
