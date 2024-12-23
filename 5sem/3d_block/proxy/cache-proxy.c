@@ -171,6 +171,14 @@ void* handle_client(void* arg) {
             CacheEntry* removed_entry = del_entry(&queue_head);
             hashmap_delete(cache, &(CacheEntry){.url = removed_entry->url});
 
+            CacheEntry* test =
+                hashmap_get(cache, &(CacheEntry){.url = removed_entry->url});
+            if (test != NULL) {
+                printf("QUESTIONS\n");
+            } else {
+                printf("NO QUESTIONS\n");
+            }
+
             int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
             if (arc == 1) {
                 printf("Cache freeing entry\n");

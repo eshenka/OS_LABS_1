@@ -92,15 +92,16 @@ void upd_entry(LRUQueue** queue, CacheEntry* entry) {
 }
 
 CacheEntry* del_entry(LRUQueue** queue) {
-    LRUQueue** node = queue;
-    while ((*node)->next != NULL) {
-        (*node) = (*node)->next;
+    LRUQueue* node = *queue;
+    while (node->next != NULL) {
+        node = node->next;
     }
 
-    CacheEntry* entry = (*node)->entry;
+    CacheEntry* entry = node->entry;
 
-    (*node)->prev->next = NULL;
-    free(*node);
+    node->prev->next = NULL;
+
+    free(node);
 
     return entry;
 }
