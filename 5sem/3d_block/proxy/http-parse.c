@@ -116,14 +116,13 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
         if (chunk_len == chunk_size) {
             pthread_rwlock_wrlock(&entry->lock);
 
-            /*printf("\n\n\n%s\n\n\n", buffer);*/
-
             strncpy(node->buffer, buffer, chunk_len);
             node->buf_len = chunk_len;
             entry->parts_done += 1;
 
             add_new_node(node, chunk_size);
             node = node->next;
+            pthread_cond_broadcast(&entry->new_part);
 
             pthread_rwlock_unlock(&entry->lock);
             chunk_len = 0;
@@ -136,9 +135,6 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
                                &msg_len, headers, &num_headers, prevbuflen);
 
         if (pret > 0) {
-
-            /*printf("\n\n\n%.*s\n\n\n", chunk_len, buffer);*/
-
             pthread_rwlock_wrlock(&entry->lock);
 
             strncpy(node->buffer, buffer, chunk_len);
@@ -174,8 +170,6 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
         printf("\n\n\nHAHAHHAHAHAHAHAH\n\n\n");
     }
 
-    /*printf("\n\n\n%.*s\n\n\n", chunk_len, buffer);*/
-
     rret = 0;
     int offset = (content_length + pret) % chunk_size;
     while (*buflen < content_length + pret) {
@@ -192,7 +186,10 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
             pthread_rwlock_wrlock(&entry->lock);
 
             strncpy(node->buffer, buffer, chunk_len);
+            /*printf("parts done before %d\n", entry->parts_done);*/
             __sync_fetch_and_add(&entry->parts_done, 1);
+            /*printf("parts done after %d\n", entry->parts_done);*/
+            pthread_cond_broadcast(&entry->new_part);
             node->buf_len = chunk_len;
 
             add_new_node(node, chunk_size);
@@ -208,14 +205,16 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
     }
 
     pthread_rwlock_wrlock(&entry->lock);
-
-    entry->parts_done += 1;
     entry->done = true;
-    __sync_fetch_and_add(&entry->parts_done, 1);
-
     pthread_rwlock_unlock(&entry->lock);
+    pthread_cond_broadcast(&entry->new_part);
+    printf("parts done %d\n", entry->parts_done);
 
-    /*printf("\n\n\n%s\n\n\n", entry->data->buffer);*/
+    /*node = entry->data;*/
+    /*while (node != NULL) {*/
+    /*    printf("\n\n%.*s\n\n", node->buf_len, node->buffer);*/
+    /*    node = node->next;*/
+    /*}*/
 
     return PARSE_SUCCESS;
 }

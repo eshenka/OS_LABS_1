@@ -19,6 +19,7 @@ typedef struct CacheEntry {
 
     pthread_rwlock_t lock;
     pthread_cond_t new_part;
+    pthread_mutex_t wait_lock;
 
 } CacheEntry;
 
