@@ -3,7 +3,7 @@
 
 #include "list.h"
 
-List* create_list(size_t buf_size) {
+List* list_create(size_t buf_size) {
     List* list = (List*)malloc(sizeof(List));
     list->buf_len = 0;
     list->buffer = (char*)malloc(sizeof(char) * buf_size);
@@ -12,20 +12,20 @@ List* create_list(size_t buf_size) {
     return list;
 }
 
-void add_new_node(List* last_node, size_t buf_size) {
-    List* new_node = create_list(buf_size);
+void list_add_node(List* last_node, size_t buf_size) {
+    List* new_node = list_create(buf_size);
 
     last_node->next = new_node;
 }
 
-void free_list(List* node) {
+void list_free(List* node) {
     free(node->buffer);
 
     if (node->next == NULL) {
         free(node);
         return;
     } else {
-        free_list(node->next);
+        list_free(node->next);
         free(node);
     }
 }

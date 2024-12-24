@@ -40,15 +40,15 @@ uint64_t my_hash(const void* item, uint64_t seed0, uint64_t seed1);
 
 int my_compare(const void* a, const void* b, void* udata);
 
-struct hashmap* create_cache();
+struct hashmap* cache_create();
 
-CacheEntry* create_entry(char* url, size_t data_size);
-void free_entry(CacheEntry* entry);
+CacheEntry* cache_entry_create(char* url, size_t data_size);
+void cache_entry_free(CacheEntry* entry);
 
-HashValue* create_value(CacheEntry* entry);
+HashValue* cache_value_create(CacheEntry* entry);
 
-void add_entry(LRUQueue** queue, CacheEntry* entry);
-void upd_entry(LRUQueue** queue, CacheEntry* entry);
-CacheEntry* del_entry(LRUQueue** queue);
+void cache_entry_add(LRUQueue** queue, CacheEntry* entry);
+void cache_entry_upd(LRUQueue** queue, CacheEntry* entry);
+CacheEntry* cache_entry_remove(LRUQueue** queue);
 
 #endif // !CACHE_H

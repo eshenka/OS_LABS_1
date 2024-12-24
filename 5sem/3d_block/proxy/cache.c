@@ -4,9 +4,9 @@
 #include <pthread.h>
 #include <stdint.h>
 
-CacheEntry* create_entry(char* url, size_t buf_size) {
+CacheEntry* cache_entry_create(char* url, size_t buf_size) {
     CacheEntry* entry = (CacheEntry*)malloc(sizeof(CacheEntry));
-    entry->data = create_list(buf_size);
+    entry->data = list_create(buf_size);
     entry->url = url;
     pthread_rwlock_init(&entry->lock, NULL);
     pthread_cond_init(&entry->new_part, NULL);
@@ -19,20 +19,17 @@ CacheEntry* create_entry(char* url, size_t buf_size) {
     return entry;
 }
 
-void free_entry(CacheEntry* entry) {
-    printf("freeing list\n");
-    free_list(entry->data);
-    printf("freeing url\n");
+void cache_entry_free(CacheEntry* entry) {
+    list_free(entry->data);
     free(entry->url);
     pthread_rwlock_destroy(&entry->lock);
     pthread_cond_destroy(&entry->new_part);
     pthread_mutex_destroy(&entry->wait_lock);
 
-    printf("freeing entry %p\n", entry);
     free(entry);
 }
 
-HashValue* create_value(CacheEntry* entry) {
+HashValue* cache_value_create(CacheEntry* entry) {
     HashValue* value = (HashValue*)malloc(sizeof(HashValue));
     value->url = entry->url;
     value->entry = entry;
@@ -52,14 +49,14 @@ int my_compare(const void* a, const void* b, void* udata) {
     return strcmp(value_a->url, value_b->url);
 }
 
-struct hashmap* create_cache() {
+struct hashmap* cache_create() {
     struct hashmap* map = hashmap_new(sizeof(HashValue), 0, 0, 0, my_hash,
                                       my_compare, NULL, NULL);
 
     return map;
 }
 
-void add_entry(LRUQueue** queue, CacheEntry* entry) {
+void cache_entry_add(LRUQueue** queue, CacheEntry* entry) {
     if (*queue == NULL) {
         (*queue) = (LRUQueue*)malloc(sizeof(LRUQueue));
         (*queue)->prev = NULL;
@@ -81,7 +78,7 @@ void add_entry(LRUQueue** queue, CacheEntry* entry) {
     (*queue) = queue_new;
 }
 
-void upd_entry(LRUQueue** queue, CacheEntry* entry) {
+void cache_entry_upd(LRUQueue** queue, CacheEntry* entry) {
     if (entry->queue_node->prev != NULL) {
         entry->queue_node->prev->next = entry->queue_node->next;
     }
@@ -89,8 +86,6 @@ void upd_entry(LRUQueue** queue, CacheEntry* entry) {
     if (entry->queue_node->next != NULL) {
         entry->queue_node->next->prev = entry->queue_node->prev;
     }
-    /*entry->queue_node->prev->next = entry->queue_node->next;*/
-    /*entry->queue_node->next->prev = entry->queue_node->prev;*/
 
     (*queue)->prev = entry->queue_node;
     entry->queue_node->next = *queue;
@@ -99,7 +94,7 @@ void upd_entry(LRUQueue** queue, CacheEntry* entry) {
     *queue = entry->queue_node;
 }
 
-CacheEntry* del_entry(LRUQueue** queue) {
+CacheEntry* cache_entry_remove(LRUQueue** queue) {
     LRUQueue* node = *queue;
     while (node->next != NULL) {
         node = node->next;
@@ -108,7 +103,6 @@ CacheEntry* del_entry(LRUQueue** queue) {
     CacheEntry* entry = node->entry;
 
     node->prev->next = NULL;
-
     free(node);
 
     return entry;

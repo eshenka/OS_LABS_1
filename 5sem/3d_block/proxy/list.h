@@ -9,10 +9,10 @@ typedef struct List {
     struct List* next;
 } List;
 
-List* create_list(size_t buf_size);
+List* list_create(size_t buf_size);
 
-void add_new_node(List* last_node, size_t buf_size);
+void list_add_node(List* last_node, size_t buf_size);
 
-void free_list(List* node);
+void list_free(List* node);
 
 #endif // !LIST_H

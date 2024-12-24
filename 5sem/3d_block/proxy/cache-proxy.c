@@ -2,6 +2,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +21,7 @@
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 #define BUFFER_SIZE 8192
-#define MAX_BUFFER_SIZE 8192 * 8
+#define MAX_BUFFER_PARTS 8
 #define URL_SIZE 1024
 #define MAX_URL_SIZE 1024 * 8
 #define MAX_CACHE_SIZE 5
@@ -83,12 +84,11 @@ void* handle_remote_server(void* arg) {
     int server_sockfd = connect_to_remote_server(server);
     if (server_sockfd == -1) {
         int arc = __sync_fetch_and_sub(&entry->arc, 1);
-        printf("Unable to connect to a remote server\n");
+        printf("[ERROR] Unable to connect to a remote server\n");
         free(data);
 
         if (arc == 1) {
-            printf("Remote server freeing entry\n");
-            free_entry(entry);
+            cache_entry_free(entry);
         }
 
         return NULL;
@@ -102,15 +102,14 @@ void* handle_remote_server(void* arg) {
 
     size_t response_len = 0;
 
-    HTTP_PARSE parse_err =
-        parse_http_response(server_sockfd, BUFFER_SIZE, &response_len, entry);
+    HTTP_PARSE parse_err = http_parse_read_response(server_sockfd, BUFFER_SIZE,
+                                                    &response_len, entry);
     if (parse_err == PARSE_ERROR) {
         int arc = __sync_fetch_and_sub(&entry->arc, 1);
         free(data);
 
         if (arc == 1) {
-            printf("Remote server freeing entry\n");
-            free_entry(entry);
+            cache_entry_free(entry);
         }
 
         close(server_sockfd);
@@ -123,8 +122,7 @@ void* handle_remote_server(void* arg) {
     pthread_rwlock_unlock(&entry->lock);
 
     if (arc == 1) {
-        printf("Remote server freeing entry\n");
-        free_entry(entry);
+        cache_entry_free(entry);
     }
     free(data);
     return NULL;
@@ -142,12 +140,12 @@ void* handle_client(void* arg) {
     int minor_version;
 
     HTTP_PARSE parse_err;
-    parse_err = parse_http_request(*client_sockfd, client_request, BUFFER_SIZE,
-                                   method, METHOD_SIZE, url, URL_SIZE,
-                                   &minor_version, &request_len);
+    parse_err = http_parse_read_request(
+        *client_sockfd, client_request, BUFFER_SIZE, method, METHOD_SIZE, url,
+        URL_SIZE, MAX_URL_SIZE, &minor_version, &request_len);
 
     if (parse_err == PARSE_ERROR) {
-        printf("Error occured during http parse\n");
+        printf("[ERROR] Error occured during http parse\n");
         close(*client_sockfd);
         free(client_sockfd);
         return NULL;
@@ -155,7 +153,7 @@ void* handle_client(void* arg) {
 
     err = check_request(method, minor_version);
     if (err == ERROR_REQUEST_UNSUPPORT) {
-        printf("Request is unsupported\n");
+        printf("[ERROR] Request is unsupported\n");
         close(*client_sockfd);
         free(client_sockfd);
         return NULL;
@@ -166,18 +164,17 @@ void* handle_client(void* arg) {
     CacheEntry* entry;
 
     if (value == NULL) {
-        entry = create_entry(url, BUFFER_SIZE);
+        entry = cache_entry_create(url, BUFFER_SIZE);
 
         value = &(HashValue){.url = url, .entry = entry};
 
         if (cache_size == MAX_CACHE_SIZE) {
-            CacheEntry* removed_entry = del_entry(&queue_head);
+            CacheEntry* removed_entry = cache_entry_remove(&queue_head);
             hashmap_delete(cache, &(CacheEntry){.url = removed_entry->url});
 
             int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
             if (arc == 1) {
-                printf("Cache freeing entry\n");
-                free_entry(removed_entry);
+                cache_entry_free(removed_entry);
             }
 
             cache_size--;
@@ -186,7 +183,7 @@ void* handle_client(void* arg) {
         hashmap_set(cache, value);
         cache_size++;
 
-        add_entry(&queue_head, entry);
+        cache_entry_add(&queue_head, entry);
 
         __sync_fetch_and_add(&entry->arc, 2);
 
@@ -199,8 +196,8 @@ void* handle_client(void* arg) {
     } else {
         entry = value->entry;
         __sync_fetch_and_add(&entry->arc, 1);
-        upd_entry(&queue_head, entry);
-        printf("Reading entry from cache %p\n", entry);
+        cache_entry_upd(&queue_head, entry);
+        printf("[INFO] Reading entry from cache %p", entry);
     }
     pthread_rwlock_unlock(&cache_lock);
 
@@ -216,15 +213,18 @@ void* handle_client(void* arg) {
     }
     pthread_mutex_unlock(&entry->wait_lock);
 
-    printf("start start\n");
-
     while (node != NULL) {
         amount_to_read = node->buf_len;
         err = write(*client_sockfd, node->buffer + written,
                     amount_to_read - written);
-        /*if (err == -1) {*/
-        /*    printf("[ERROR] Error during writing response to client\n");*/
-        /*}*/
+        if (err == -1) {
+            printf("[ERROR] Error during writing response to client: %s\n",
+                   strerror(errno));
+            __sync_fetch_and_sub(&entry->arc, 1);
+            close(*client_sockfd);
+            free(client_sockfd);
+            return NULL;
+        }
         written += err;
 
         if (written >= amount_to_read) {
@@ -244,13 +244,10 @@ void* handle_client(void* arg) {
         }
     }
 
-    printf("\nend\n");
-
     // Client thread exits, so it won't have a ref to entry
     int arc = __sync_fetch_and_sub(&entry->arc, 1);
     if (arc == 1) {
-        printf("Client thread freeing entry\n");
-        free_entry(entry);
+        cache_entry_free(entry);
     }
 
     close(*client_sockfd);
@@ -263,13 +260,16 @@ int main() {
 
     int server_sockfd = create_server_socket_and_listen(PORT);
     if (server_sockfd == -1) {
-        printf("Error starting proxy server\n");
+        printf("[ERROR] Error starting proxy server\n");
         return -1;
     }
 
-    cache = create_cache();
+    cache = cache_create();
     cache_size = 0;
     queue_head = NULL;
+
+    /*signal(SIGPIPE, broken_pipe_handler);*/
+    signal(SIGPIPE, SIG_IGN);
 
     while (1) {
         struct sockaddr_in client_addr;

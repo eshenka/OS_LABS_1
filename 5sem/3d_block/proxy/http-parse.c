@@ -14,11 +14,11 @@
 
 // Code in this function is using picohttpparser library. The way of parsing
 // with it is fully described in README on github
-HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
-                              int request_size, char* ret_method,
-                              const int method_size, char* ret_url,
-                              const int url_size, int* minor_version,
-                              size_t* buflen) {
+HTTP_PARSE http_parse_read_request(int client_sockfd, char* client_request,
+                                   int request_size, char* ret_method,
+                                   const int method_size, char* ret_url,
+                                   const int url_size, const int max_url_size,
+                                   int* minor_version, size_t* buflen) {
     const char* method;
     const char* url;
     struct phr_header headers[100];
@@ -34,7 +34,7 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
             ;
 
         if (rret <= 0) {
-            printf("Closing. {rret <= 0}\n");
+            printf("[ERROR] Error reading from client\n");
             return PARSE_ERROR;
         }
 
@@ -46,29 +46,28 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
                                  &url, &url_len, minor_version, headers,
                                  &num_headers, prevbuflen);
 
-        printf("url_len = %lu\n", url_len);
-
         if (pret > 0) {
             break;
-        } else if (pret == -1) {
-            printf("Closing. {pret == -1}\n");
-            return PARSE_ERROR;
         }
 
         if (pret != -2) {
-            printf("Something went wrong during parsing http\n");
+            printf("[ERROR] Error parsing client request\n");
             return PARSE_ERROR;
         }
 
         if (*buflen == request_size) {
-            printf("Closing connection. Request is too long\n");
+            printf("[ERROR] Client request is too long\n");
             return PARSE_ERROR;
         }
     }
 
-    if (url_len > url_size) {
-        printf("Closing. URL is too long\n");
+    if (url_len > max_url_size) {
+        printf("[ERROR] URL is too long\n");
         return PARSE_ERROR;
+    }
+
+    if (url_len > url_size) {
+        ret_url = realloc(ret_url, sizeof(char) * url_len);
     }
 
     memcpy(ret_method, method, method_size - 1);
@@ -82,8 +81,8 @@ HTTP_PARSE parse_http_request(int client_sockfd, char* client_request,
     return PARSE_SUCCESS;
 }
 
-HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
-                               size_t* buflen, CacheEntry* entry) {
+HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
+                                    size_t* buflen, CacheEntry* entry) {
     const char* msg;
     struct phr_header headers[100];
     size_t prevbuflen = 0, msg_len, num_headers;
@@ -119,9 +118,8 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
             memcpy(node->buffer, buffer, chunk_len);
             node->buf_len = chunk_len;
             entry->parts_done += 1;
-            printf("parts done wow\n");
 
-            add_new_node(node, chunk_size);
+            list_add_node(node, chunk_size);
             node = node->next;
             pthread_cond_broadcast(&entry->new_part);
 
@@ -168,7 +166,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
     }
 
     if (content_length == 0) {
-        printf("\n\n\nHAHAHHAHAHAHAHAH\n\n\n");
+        printf("\n\n\nContent length is not provided\n\n\n");
     }
 
     rret = 0;
@@ -191,7 +189,7 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
             pthread_cond_broadcast(&entry->new_part);
             node->buf_len = chunk_len;
 
-            add_new_node(node, chunk_size);
+            list_add_node(node, chunk_size);
             node = node->next;
 
             pthread_rwlock_unlock(&entry->lock);
@@ -207,8 +205,6 @@ HTTP_PARSE parse_http_response(int server_sockfd, int response_size,
     entry->done = true;
     pthread_rwlock_unlock(&entry->lock);
     pthread_cond_broadcast(&entry->new_part);
-
-    printf("End reading %s\n", entry->url);
 
     return PARSE_SUCCESS;
 }
