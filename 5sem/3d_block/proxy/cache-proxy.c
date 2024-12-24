@@ -30,7 +30,7 @@ typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 struct hashmap* cache;
 LRUQueue* queue_head;
-pthread_rwlock_t cache_lock = PTHREAD_RWLOCK_INITIALIZER;
+pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 size_t cache_size;
 
 typedef struct RemoteServer {
@@ -159,7 +159,7 @@ void* handle_client(void* arg) {
         return NULL;
     }
 
-    pthread_rwlock_wrlock(&cache_lock);
+    pthread_mutex_lock(&cache_lock);
     HashValue* value = hashmap_get(cache, &(HashValue){.url = url});
     CacheEntry* entry;
 
@@ -197,9 +197,9 @@ void* handle_client(void* arg) {
         entry = value->entry;
         __sync_fetch_and_add(&entry->arc, 1);
         cache_entry_upd(&queue_head, entry);
-        printf("[INFO] Reading entry from cache %p", entry);
+        printf("[INFO] Reading entry from cache %p\n", entry);
     }
-    pthread_rwlock_unlock(&cache_lock);
+    pthread_mutex_unlock(&cache_lock);
 
     size_t written = 0;
     size_t offset = entry->response_len - entry->response_len % BUFFER_SIZE;
