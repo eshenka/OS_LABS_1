@@ -165,17 +165,22 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
         content_length = atoi(headers[i].value);
     }
 
-    if (content_length == 0) {
-        printf("\n\n\nContent length is not provided\n\n\n");
-    }
+    /*if (content_length == 0) {*/
+    /*    printf("\n\n\nContent length is not provided\n\n\n");*/
+    /*}*/
 
     rret = 0;
     int offset = (content_length + pret) % chunk_size;
-    while (*buflen < content_length + pret) {
+    while (content_length == 0 || *buflen < content_length + pret) {
         rret = read(server_sockfd, buffer + chunk_len, chunk_size - chunk_len);
+
         if (rret == -1) {
             printf("Read response error\n");
             return PARSE_ERROR;
+        }
+
+        if (rret == 0 && content_length == 0) {
+            break;
         }
 
         *buflen += rret;

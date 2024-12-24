@@ -73,9 +73,6 @@ void* handle_remote_server(void* arg) {
     size_t request_len = data->request_len;
     char* client_request = data->client_request;
 
-    // Server thread has a ref to entry
-    __sync_fetch_and_add(&entry->arc, 1);
-
     char host[URL_SIZE], path[URL_SIZE];
     sscanf(url, "http://%[^/]%s", host, path);
 
@@ -132,7 +129,7 @@ void* handle_remote_server(void* arg) {
 void* handle_client(void* arg) {
     Error err;
 
-    int* client_sockfd = (int*)arg;
+    int client_sockfd = (int)arg;
 
     size_t request_len = 0;
     char client_request[BUFFER_SIZE];
@@ -142,21 +139,19 @@ void* handle_client(void* arg) {
 
     HTTP_PARSE parse_err;
     parse_err = http_parse_read_request(
-        *client_sockfd, client_request, BUFFER_SIZE, method, METHOD_SIZE, url,
+        client_sockfd, client_request, BUFFER_SIZE, method, METHOD_SIZE, url,
         URL_SIZE, MAX_URL_SIZE, &minor_version, &request_len);
 
     if (parse_err == PARSE_ERROR) {
         printf("[ERROR] Error occured during http parse\n");
-        close(*client_sockfd);
-        free(client_sockfd);
+        close(client_sockfd);
         return NULL;
     }
 
     err = check_request(method, minor_version);
     if (err == ERROR_REQUEST_UNSUPPORT) {
         printf("[ERROR] Request is unsupported\n");
-        close(*client_sockfd);
-        free(client_sockfd);
+        close(client_sockfd);
         return NULL;
     }
 
@@ -187,7 +182,7 @@ void* handle_client(void* arg) {
 
         cache_entry_add(&queue_head, &queue_tail, entry);
 
-        __sync_fetch_and_add(&entry->arc, 2);
+        __sync_fetch_and_add(&entry->arc, 3);
 
         RemoteServer* remote_data =
             create_remote_data(entry, request_len, url, client_request);
@@ -217,14 +212,13 @@ void* handle_client(void* arg) {
 
     while (node != NULL) {
         amount_to_read = node->buf_len;
-        err = write(*client_sockfd, node->buffer + written,
+        err = write(client_sockfd, node->buffer + written,
                     amount_to_read - written);
         if (err == -1) {
             printf("[ERROR] Error during writing response to client: %s\n",
                    strerror(errno));
             __sync_fetch_and_sub(&entry->arc, 1);
-            close(*client_sockfd);
-            free(client_sockfd);
+            close(client_sockfd);
             return NULL;
         }
         written += err;
@@ -252,8 +246,7 @@ void* handle_client(void* arg) {
         cache_entry_free(entry);
     }
 
-    close(*client_sockfd);
-    free(client_sockfd);
+    close(client_sockfd);
     return NULL;
 }
 
@@ -270,23 +263,21 @@ int main() {
     cache_size = 0;
     queue_head = NULL;
 
-    /*signal(SIGPIPE, broken_pipe_handler);*/
     signal(SIGPIPE, SIG_IGN);
 
     while (1) {
         struct sockaddr_in client_addr;
         socklen_t client_len;
 
-        int* client_sockfd = (int*)malloc(sizeof(int));
-        *client_sockfd =
+        int client_sockfd =
             accept(server_sockfd, (struct sockaddr*)&client_addr, &client_len);
 
-        if (*client_sockfd < 0) {
+        if (client_sockfd < 0) {
             if (errno == EINTR) {
                 continue;
             }
 
-            printf("Unable to accept");
+            printf("[ERROR] Unable to accept");
 
             continue;
         }
@@ -294,7 +285,8 @@ int main() {
         printf("New client\n");
 
         pthread_t client_thread;
-        pthread_create(&client_thread, NULL, handle_client, client_sockfd);
+        pthread_create(&client_thread, NULL, handle_client,
+                       (void*)client_sockfd);
         pthread_detach(client_thread);
     }
 
