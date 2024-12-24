@@ -47,8 +47,8 @@ void cache_entry_free(CacheEntry* entry);
 
 HashValue* cache_value_create(CacheEntry* entry);
 
-void cache_entry_add(LRUQueue** queue, CacheEntry* entry);
-void cache_entry_upd(LRUQueue** queue, CacheEntry* entry);
-CacheEntry* cache_entry_remove(LRUQueue** queue);
+void cache_entry_add(LRUQueue** head, LRUQueue** tail, CacheEntry* entry);
+void cache_entry_upd(LRUQueue** head, LRUQueue** tail, CacheEntry* entry);
+CacheEntry* cache_entry_remove(LRUQueue** head, LRUQueue** tail);
 
 #endif // !CACHE_H

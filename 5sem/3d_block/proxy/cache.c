@@ -56,54 +56,63 @@ struct hashmap* cache_create() {
     return map;
 }
 
-void cache_entry_add(LRUQueue** queue, CacheEntry* entry) {
-    if (*queue == NULL) {
-        (*queue) = (LRUQueue*)malloc(sizeof(LRUQueue));
-        (*queue)->prev = NULL;
-        (*queue)->next = NULL;
-        (*queue)->entry = entry;
-        entry->queue_node = *queue;
+void cache_entry_add(LRUQueue** head, LRUQueue** tail, CacheEntry* entry) {
+    if (*head == NULL) {
+        (*head) = (LRUQueue*)malloc(sizeof(LRUQueue));
+        /*(*tail) = (LRUQueue*)malloc(sizeof(LRUQueue));*/
+
+        (*head)->prev = NULL;
+        (*head)->next = NULL;
+        (*head)->entry = entry;
+        (*tail) = *head;
+
+        entry->queue_node = *head;
 
         return;
     }
 
     LRUQueue* queue_new = (LRUQueue*)malloc(sizeof(LRUQueue));
-    (*queue)->prev = queue_new;
-    queue_new->next = (*queue);
+    (*head)->prev = queue_new;
+    queue_new->next = (*head);
     queue_new->prev = NULL;
 
     queue_new->entry = entry;
     entry->queue_node = queue_new;
 
-    (*queue) = queue_new;
+    (*head) = queue_new;
 }
 
-void cache_entry_upd(LRUQueue** queue, CacheEntry* entry) {
+void cache_entry_upd(LRUQueue** head, LRUQueue** tail, CacheEntry* entry) {
     if (entry->queue_node->prev != NULL) {
         entry->queue_node->prev->next = entry->queue_node->next;
     }
 
     if (entry->queue_node->next != NULL) {
         entry->queue_node->next->prev = entry->queue_node->prev;
+    } else if (entry->queue_node->prev != NULL) {
+        *tail = entry->queue_node->prev;
     }
 
-    (*queue)->prev = entry->queue_node;
-    entry->queue_node->next = *queue;
+    (*head)->prev = entry->queue_node;
+    entry->queue_node->next = *head;
     entry->queue_node->prev = NULL;
 
-    *queue = entry->queue_node;
+    *head = entry->queue_node;
 }
 
-CacheEntry* cache_entry_remove(LRUQueue** queue) {
-    LRUQueue* node = *queue;
-    while (node->next != NULL) {
-        node = node->next;
-    }
+CacheEntry* cache_entry_remove(LRUQueue** head, LRUQueue** tail) {
+    LRUQueue* node = *tail;
 
     CacheEntry* entry = node->entry;
 
-    node->prev->next = NULL;
-    free(node);
+    if (node->prev != NULL) {
+        node->prev->next = NULL;
+        *tail = node->prev;
+    } else {
+        *head = NULL;
+        *tail = NULL;
+    }
 
+    free(node);
     return entry;
 }

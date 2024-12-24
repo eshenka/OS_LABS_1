@@ -30,6 +30,7 @@ typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 struct hashmap* cache;
 LRUQueue* queue_head;
+LRUQueue* queue_tail;
 pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 size_t cache_size;
 
@@ -169,7 +170,8 @@ void* handle_client(void* arg) {
         value = &(HashValue){.url = url, .entry = entry};
 
         if (cache_size == MAX_CACHE_SIZE) {
-            CacheEntry* removed_entry = cache_entry_remove(&queue_head);
+            CacheEntry* removed_entry =
+                cache_entry_remove(&queue_head, &queue_tail);
             hashmap_delete(cache, &(CacheEntry){.url = removed_entry->url});
 
             int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
@@ -183,7 +185,7 @@ void* handle_client(void* arg) {
         hashmap_set(cache, value);
         cache_size++;
 
-        cache_entry_add(&queue_head, entry);
+        cache_entry_add(&queue_head, &queue_tail, entry);
 
         __sync_fetch_and_add(&entry->arc, 2);
 
@@ -196,7 +198,7 @@ void* handle_client(void* arg) {
     } else {
         entry = value->entry;
         __sync_fetch_and_add(&entry->arc, 1);
-        cache_entry_upd(&queue_head, entry);
+        cache_entry_upd(&queue_head, &queue_tail, entry);
         printf("[INFO] Reading entry from cache %p\n", entry);
     }
     pthread_mutex_unlock(&cache_lock);
