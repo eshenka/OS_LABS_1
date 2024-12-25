@@ -3,6 +3,6 @@
 
 int create_server_socket_and_listen(int port);
 
-int connect_to_remote_server(struct hostent* server);
+int connect_to_remote_server(char* url, const int max_url_size);
 
 #endif // !NETWORK_H

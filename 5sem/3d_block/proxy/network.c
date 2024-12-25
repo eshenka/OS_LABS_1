@@ -44,24 +44,38 @@ int create_server_socket_and_listen(int port) {
     return server_sockfd;
 }
 
-int connect_to_remote_server(struct hostent* server) {
-    int server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+int connect_to_remote_server(char* url, const int max_url_size) {
+    char host[max_url_size], path[max_url_size];
+    sscanf(url, "http://%[^/]%s", host, path);
 
-    if (server_sockfd < 0) {
-        return ERROR;
+    char* service = "http";
+    const struct addrinfo hints = {.ai_family = AF_INET,
+                                   .ai_socktype = SOCK_STREAM,
+                                   .ai_protocol = IPPROTO_TCP};
+    struct addrinfo* addresses;
+    int err = getaddrinfo(host, service, &hints, &addresses);
+    if (err == -1) {
+        return -1;
     }
+    struct addrinfo* curr = addresses;
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-    server_addr.sin_port = htons(80);
+    int server_sockfd = -1;
+    while (curr != NULL) {
+        int fd = socket(curr->ai_family, curr->ai_socktype, curr->ai_protocol);
+        if (fd < 0) {
+            curr = curr->ai_next;
+            continue;
+        }
 
-    int con = connect(server_sockfd, (struct sockaddr*)&server_addr,
-                      sizeof(server_addr));
-    if (con != 0) {
-        close(server_sockfd);
-        return ERROR;
+        err = connect(fd, curr->ai_addr, curr->ai_addrlen);
+        if (err) {
+            curr = curr->ai_next;
+            close(fd);
+            continue;
+        }
+
+        server_sockfd = fd;
+        break;
     }
 
     return server_sockfd;

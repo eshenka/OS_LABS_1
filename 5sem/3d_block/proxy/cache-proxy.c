@@ -21,7 +21,7 @@
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 #define BUFFER_SIZE 8192
-#define MAX_BUFFER_PARTS 131072 * 2 // 2GB
+#define MAX_BUFFER_PARTS 131072 * 2 // 2 GB
 #define URL_SIZE 1024
 #define MAX_URL_SIZE 1024 * 8
 #define MAX_CACHE_SIZE 20
@@ -74,13 +74,7 @@ void* handle_remote_server(void* arg) {
     size_t request_len = data->request_len;
     char* client_request = data->client_request;
 
-    char host[URL_SIZE], path[URL_SIZE];
-    sscanf(url, "http://%[^/]%s", host, path);
-
-    struct hostent* server;
-    server = gethostbyname(host);
-
-    int server_sockfd = connect_to_remote_server(server);
+    int server_sockfd = connect_to_remote_server(url, MAX_URL_SIZE);
     if (server_sockfd == -1) {
         int arc = __sync_fetch_and_sub(&entry->arc, 1);
         printf("[ERROR] Unable to connect to a remote server\n");
@@ -130,7 +124,7 @@ void* handle_remote_server(void* arg) {
 void* handle_client(void* arg) {
     Error err;
 
-    int client_sockfd = (int)arg;
+    int client_sockfd = (long)arg;
 
     size_t request_len = 0;
     char client_request[BUFFER_SIZE];
@@ -157,7 +151,7 @@ void* handle_client(void* arg) {
     }
 
     pthread_mutex_lock(&cache_lock);
-    HashValue* value = hashmap_get(cache, &(HashValue){.url = url});
+    const HashValue* value = hashmap_get(cache, &(HashValue){.url = url});
     CacheEntry* entry;
 
     if (value == NULL) {
@@ -304,8 +298,6 @@ int main() {
 
     signal(SIGINT, SIGINT_handler);
 
-    int err;
-
     int server_sockfd = create_server_socket_and_listen(PORT);
     if (server_sockfd == -1) {
         printf("[ERROR] Error starting proxy server\n");
@@ -339,7 +331,7 @@ int main() {
 
         pthread_t client_thread;
         pthread_create(&client_thread, NULL, handle_client,
-                       (void*)client_sockfd);
+                       (void*)(long)client_sockfd);
         pthread_detach(client_thread);
     }
 
