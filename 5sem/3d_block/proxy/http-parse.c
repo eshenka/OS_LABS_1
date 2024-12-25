@@ -82,7 +82,8 @@ HTTP_PARSE http_parse_read_request(int client_sockfd, char* client_request,
 }
 
 HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
-                                    size_t* buflen, CacheEntry* entry) {
+                                    const int max_buffer_parts, size_t* buflen,
+                                    CacheEntry* entry) {
     const char* msg;
     struct phr_header headers[100];
     size_t prevbuflen = 0, msg_len, num_headers;
@@ -93,8 +94,6 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
     size_t chunk_len = *buflen;
     List* node = entry->data;
     List* head = entry->data;
-
-    int content_length = 0;
 
     char buffer[chunk_size];
 
@@ -114,6 +113,14 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
 
         if (chunk_len == chunk_size) {
             pthread_rwlock_wrlock(&entry->lock);
+
+            if (entry->parts_done == max_buffer_parts) {
+                entry->error = true;
+
+                pthread_rwlock_unlock(&entry->lock);
+
+                break;
+            }
 
             memcpy(node->buffer, buffer, chunk_len);
             node->buf_len = chunk_len;
@@ -157,6 +164,7 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
         }
     }
 
+    int content_length = -1;
     for (int i = 0; i < num_headers; i++) {
         if (strncmp(headers[i].name, "Content-Length", headers[i].name_len)) {
             continue;
@@ -165,21 +173,24 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
         content_length = atoi(headers[i].value);
     }
 
-    /*if (content_length == 0) {*/
-    /*    printf("\n\n\nContent length is not provided\n\n\n");*/
-    /*}*/
-
     rret = 0;
     int offset = (content_length + pret) % chunk_size;
-    while (content_length == 0 || *buflen < content_length + pret) {
+    while (content_length == -1 || *buflen < content_length + pret) {
+        pthread_rwlock_rdlock(&entry->lock);
+        if (entry->error) {
+            pthread_rwlock_unlock(&entry->lock);
+            break;
+        }
+        pthread_rwlock_unlock(&entry->lock);
+
         rret = read(server_sockfd, buffer + chunk_len, chunk_size - chunk_len);
 
         if (rret == -1) {
-            printf("Read response error\n");
+            printf("[ERROR] Read response error %d\n", entry->parts_done);
             return PARSE_ERROR;
         }
 
-        if (rret == 0 && content_length == 0) {
+        if (rret == 0 && content_length == -1) {
             break;
         }
 
@@ -188,6 +199,14 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
 
         if (chunk_len >= chunk_size) {
             pthread_rwlock_wrlock(&entry->lock);
+
+            if (entry->parts_done == max_buffer_parts) {
+                entry->error = true;
+
+                pthread_rwlock_unlock(&entry->lock);
+
+                break;
+            }
 
             memcpy(node->buffer, buffer, chunk_len);
             __sync_fetch_and_add(&entry->parts_done, 1);

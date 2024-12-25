@@ -15,6 +15,7 @@ typedef struct CacheEntry {
     int arc;
     size_t response_len;
     bool done;
+    bool error;
     int parts_done;
 
     struct LRUQueue* queue_node;

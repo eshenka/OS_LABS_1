@@ -14,6 +14,7 @@ CacheEntry* cache_entry_create(char* url, size_t buf_size) {
     entry->arc = 0;
     entry->response_len = 0;
     entry->done = false;
+    entry->error = false;
     entry->parts_done = 0;
 
     return entry;

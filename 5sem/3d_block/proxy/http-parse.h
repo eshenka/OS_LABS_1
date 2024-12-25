@@ -17,6 +17,7 @@ HTTP_PARSE http_parse_read_request(int client_sockfd, char* client_request,
                                    int* minor_version, size_t* buflen);
 
 HTTP_PARSE http_parse_read_response(int server_sockfd, int reponse_size,
-                                    size_t* buflen, CacheEntry* entry);
+                                    const int max_buffer_parts, size_t* buflen,
+                                    CacheEntry* entry);
 
 #endif // !HTTP_PARSE_H

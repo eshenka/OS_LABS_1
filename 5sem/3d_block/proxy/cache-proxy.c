@@ -21,10 +21,10 @@
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 #define BUFFER_SIZE 8192
-#define MAX_BUFFER_PARTS 8
+#define MAX_BUFFER_PARTS 25600 // 200MB
 #define URL_SIZE 1024
 #define MAX_URL_SIZE 1024 * 8
-#define MAX_CACHE_SIZE 5
+#define MAX_CACHE_SIZE 20
 #define PORT 2367
 #define METHOD_SIZE 4
 
@@ -100,8 +100,8 @@ void* handle_remote_server(void* arg) {
 
     size_t response_len = 0;
 
-    HTTP_PARSE parse_err = http_parse_read_response(server_sockfd, BUFFER_SIZE,
-                                                    &response_len, entry);
+    HTTP_PARSE parse_err = http_parse_read_response(
+        server_sockfd, BUFFER_SIZE, MAX_BUFFER_PARTS, &response_len, entry);
     if (parse_err == PARSE_ERROR) {
         int arc = __sync_fetch_and_sub(&entry->arc, 1);
         free(data);
@@ -194,13 +194,23 @@ void* handle_client(void* arg) {
         entry = value->entry;
         __sync_fetch_and_add(&entry->arc, 1);
         cache_entry_upd(&queue_head, &queue_tail, entry);
-        printf("[INFO] Reading entry from cache %p\n", entry);
+        printf("[INFO] Reading entry from cache. URL: %s\n", entry->url);
+    }
+
+    if (entry->error) {
+        int arc = __sync_fetch_and_sub(&entry->arc, 1);
+        if (arc == 1) {
+            cache_entry_free(entry);
+        }
+
+        close(client_sockfd);
+
+        pthread_mutex_unlock(&cache_lock);
+        return NULL;
     }
     pthread_mutex_unlock(&cache_lock);
 
     size_t written = 0;
-    size_t offset = entry->response_len - entry->response_len % BUFFER_SIZE;
-    List* node = entry->data;
     int parts_read = 0;
     int amount_to_read = 0;
 
@@ -210,10 +220,22 @@ void* handle_client(void* arg) {
     }
     pthread_mutex_unlock(&entry->wait_lock);
 
+    char* buffer[BUFFER_SIZE];
+    pthread_rwlock_rdlock(&entry->lock);
+    List* node = entry->data;
+    amount_to_read = node->buf_len;
+    memcpy(buffer, node->buffer, node->buf_len);
+    pthread_rwlock_unlock(&entry->lock);
+
     while (node != NULL) {
-        amount_to_read = node->buf_len;
-        err = write(client_sockfd, node->buffer + written,
-                    amount_to_read - written);
+        pthread_rwlock_rdlock(&entry->lock);
+        if (entry->error) {
+            pthread_rwlock_unlock(&entry->lock);
+            break;
+        }
+        pthread_rwlock_unlock(&entry->lock);
+
+        err = write(client_sockfd, buffer + written, amount_to_read - written);
         if (err == -1) {
             printf("[ERROR] Error during writing response to client: %s\n",
                    strerror(errno));
@@ -234,13 +256,17 @@ void* handle_client(void* arg) {
                 while (parts_read == entry->parts_done && !entry->done) {
                     pthread_cond_wait(&entry->new_part, &entry->wait_lock);
                 }
-                node = node->next;
                 pthread_mutex_unlock(&entry->wait_lock);
+
+                pthread_rwlock_rdlock(&entry->lock);
+                node = node->next;
+                amount_to_read = node->buf_len;
+                memcpy(buffer, node->buffer, amount_to_read);
+                pthread_rwlock_unlock(&entry->lock);
             }
         }
     }
 
-    // Client thread exits, so it won't have a ref to entry
     int arc = __sync_fetch_and_sub(&entry->arc, 1);
     if (arc == 1) {
         cache_entry_free(entry);
