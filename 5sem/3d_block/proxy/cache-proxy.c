@@ -21,7 +21,7 @@
 typedef enum Error { SUCCESS, ERROR_REQUEST_UNSUPPORT } Error;
 
 #define BUFFER_SIZE 8192
-#define MAX_BUFFER_PARTS 25600 // 200MB
+#define MAX_BUFFER_PARTS 131072 * 2 // 2GB
 #define URL_SIZE 1024
 #define MAX_URL_SIZE 1024 * 8
 #define MAX_CACHE_SIZE 20
@@ -33,6 +33,7 @@ LRUQueue* queue_head;
 LRUQueue* queue_tail;
 pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 size_t cache_size;
+int terminate;
 
 typedef struct RemoteServer {
     char* url;
@@ -208,6 +209,7 @@ void* handle_client(void* arg) {
         pthread_mutex_unlock(&cache_lock);
         return NULL;
     }
+
     pthread_mutex_unlock(&cache_lock);
 
     size_t written = 0;
@@ -250,7 +252,14 @@ void* handle_client(void* arg) {
             written = 0;
 
             if (entry->done) {
+                pthread_rwlock_rdlock(&entry->lock);
                 node = node->next;
+                if (!node) {
+                    break;
+                }
+                amount_to_read = node->buf_len;
+                memcpy(buffer, node->buffer, amount_to_read);
+                pthread_rwlock_unlock(&entry->lock);
             } else {
                 pthread_mutex_lock(&entry->wait_lock);
                 while (parts_read == entry->parts_done && !entry->done) {
@@ -260,6 +269,9 @@ void* handle_client(void* arg) {
 
                 pthread_rwlock_rdlock(&entry->lock);
                 node = node->next;
+                if (!node) {
+                    break;
+                }
                 amount_to_read = node->buf_len;
                 memcpy(buffer, node->buffer, amount_to_read);
                 pthread_rwlock_unlock(&entry->lock);
@@ -276,7 +288,22 @@ void* handle_client(void* arg) {
     return NULL;
 }
 
+void SIGINT_handler(int signo) {
+    if (signo == SIGINT) {
+        if (!terminate) {
+            terminate = 1;
+            return;
+        } else {
+            exit(0);
+        }
+    }
+}
+
 int main() {
+    terminate = 0;
+
+    signal(SIGINT, SIGINT_handler);
+
     int err;
 
     int server_sockfd = create_server_socket_and_listen(PORT);
@@ -291,7 +318,7 @@ int main() {
 
     signal(SIGPIPE, SIG_IGN);
 
-    while (1) {
+    while (!terminate) {
         struct sockaddr_in client_addr;
         socklen_t client_len;
 
@@ -316,5 +343,5 @@ int main() {
         pthread_detach(client_thread);
     }
 
-    return 0;
+    pthread_exit(NULL);
 }
