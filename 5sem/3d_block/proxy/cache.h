@@ -37,13 +37,10 @@ typedef struct LRUQueue {
     CacheEntry* entry;
 } LRUQueue;
 
-uint64_t my_hash(const void* item, uint64_t seed0, uint64_t seed1);
-
-int my_compare(const void* a, const void* b, void* udata);
-
 struct hashmap* cache_create();
 
 CacheEntry* cache_entry_create(char* url, size_t data_size);
+void cache_entry_sub(CacheEntry* entry);
 void cache_entry_free(CacheEntry* entry);
 
 HashValue* cache_value_create(CacheEntry* entry);

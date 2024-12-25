@@ -20,6 +20,14 @@ CacheEntry* cache_entry_create(char* url, size_t buf_size) {
     return entry;
 }
 
+void cache_entry_sub(CacheEntry* entry) {
+    int arc = __sync_fetch_and_sub(&entry->arc, 1);
+
+    if (arc == 1) {
+        cache_entry_free(entry);
+    }
+}
+
 void cache_entry_free(CacheEntry* entry) {
     list_free(entry->data);
     free(entry->url);

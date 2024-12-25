@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -55,12 +56,12 @@ RemoteServer* create_remote_data(CacheEntry* entry, size_t request_len,
 
 Error check_request(char* method, int minor_version) {
     if (strcmp(method, "GET")) {
-        printf("Only GET method is supported\n");
+        fprintf(stderr, "[ERROR] Only GET method is supported\n");
         return ERROR_REQUEST_UNSUPPORT;
     }
 
     if (minor_version != 0) {
-        printf("Only 1.0 version is supported\n");
+        fprintf(stderr, "[ERROR] Only 1.0 version is supported\n");
         return ERROR_REQUEST_UNSUPPORT;
     }
 
@@ -76,13 +77,9 @@ void* handle_remote_server(void* arg) {
 
     int server_sockfd = connect_to_remote_server(url, MAX_URL_SIZE);
     if (server_sockfd == -1) {
-        int arc = __sync_fetch_and_sub(&entry->arc, 1);
-        printf("[ERROR] Unable to connect to a remote server\n");
+        fprintf(stderr, "[ERROR] Unable to connect to a remote server\n");
+        cache_entry_sub(entry);
         free(data);
-
-        if (arc == 1) {
-            cache_entry_free(entry);
-        }
 
         return NULL;
     }
@@ -98,12 +95,8 @@ void* handle_remote_server(void* arg) {
     HTTP_PARSE parse_err = http_parse_read_response(
         server_sockfd, BUFFER_SIZE, MAX_BUFFER_PARTS, &response_len, entry);
     if (parse_err == PARSE_ERROR) {
-        int arc = __sync_fetch_and_sub(&entry->arc, 1);
+        cache_entry_sub(entry);
         free(data);
-
-        if (arc == 1) {
-            cache_entry_free(entry);
-        }
 
         close(server_sockfd);
         return NULL;
@@ -126,29 +119,45 @@ void* handle_client(void* arg) {
 
     int client_sockfd = (long)arg;
 
+    int pthread_err;
+    pthread_attr_t attr;
+    pthread_err = pthread_attr_init(&attr);
+    if (pthread_err) {
+        close(client_sockfd);
+        return NULL;
+    }
+
+    pthread_err = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (pthread_err) {
+        close(client_sockfd);
+        return NULL;
+    }
+
     size_t request_len = 0;
     char client_request[BUFFER_SIZE];
-    char method[METHOD_SIZE];
-    char* url = (char*)malloc(sizeof(char) * URL_SIZE);
+    char* method;
+    char* url;
     int minor_version;
 
     HTTP_PARSE parse_err;
     parse_err = http_parse_read_request(
-        client_sockfd, client_request, BUFFER_SIZE, method, METHOD_SIZE, url,
-        URL_SIZE, MAX_URL_SIZE, &minor_version, &request_len);
+        client_sockfd, client_request, BUFFER_SIZE, &method, &url, URL_SIZE,
+        MAX_URL_SIZE, &minor_version, &request_len);
 
     if (parse_err == PARSE_ERROR) {
-        printf("[ERROR] Error occured during http parse\n");
+        fprintf(stderr, "[ERROR] Error occured during http parse\n");
         close(client_sockfd);
         return NULL;
     }
 
     err = check_request(method, minor_version);
     if (err == ERROR_REQUEST_UNSUPPORT) {
-        printf("[ERROR] Request is unsupported\n");
+        fprintf(stderr, "[ERROR] Request is unsupported\n");
         close(client_sockfd);
         return NULL;
     }
+
+    printf("[INFO] HTTP GET %s\n", url);
 
     pthread_mutex_lock(&cache_lock);
     const HashValue* value = hashmap_get(cache, &(HashValue){.url = url});
@@ -164,10 +173,7 @@ void* handle_client(void* arg) {
                 cache_entry_remove(&queue_head, &queue_tail);
             hashmap_delete(cache, &(CacheEntry){.url = removed_entry->url});
 
-            int arc = __sync_fetch_and_sub(&removed_entry->arc, 1);
-            if (arc == 1) {
-                cache_entry_free(removed_entry);
-            }
+            cache_entry_sub(removed_entry);
 
             cache_size--;
         }
@@ -183,8 +189,15 @@ void* handle_client(void* arg) {
             create_remote_data(entry, request_len, url, client_request);
 
         pthread_t tid;
-        pthread_create(&tid, NULL, handle_remote_server, (void*)remote_data);
-        pthread_detach(tid);
+        pthread_err = pthread_create(&tid, &attr, handle_remote_server,
+                                     (void*)remote_data);
+        if (pthread_err) {
+            close(client_sockfd);
+            cache_entry_sub(entry);
+            cache_entry_sub(entry);
+            pthread_mutex_unlock(&cache_lock);
+            return NULL;
+        }
     } else {
         entry = value->entry;
         __sync_fetch_and_add(&entry->arc, 1);
@@ -193,11 +206,7 @@ void* handle_client(void* arg) {
     }
 
     if (entry->error) {
-        int arc = __sync_fetch_and_sub(&entry->arc, 1);
-        if (arc == 1) {
-            cache_entry_free(entry);
-        }
-
+        cache_entry_sub(entry);
         close(client_sockfd);
 
         pthread_mutex_unlock(&cache_lock);
@@ -233,9 +242,10 @@ void* handle_client(void* arg) {
 
         err = write(client_sockfd, buffer + written, amount_to_read - written);
         if (err == -1) {
-            printf("[ERROR] Error during writing response to client: %s\n",
-                   strerror(errno));
-            __sync_fetch_and_sub(&entry->arc, 1);
+            fprintf(stderr,
+                    "[ERROR] Error during writing response to client: %s\n",
+                    strerror(errno));
+            cache_entry_sub(entry);
             close(client_sockfd);
             return NULL;
         }
@@ -273,11 +283,7 @@ void* handle_client(void* arg) {
         }
     }
 
-    int arc = __sync_fetch_and_sub(&entry->arc, 1);
-    if (arc == 1) {
-        cache_entry_free(entry);
-    }
-
+    cache_entry_sub(entry);
     close(client_sockfd);
     return NULL;
 }
@@ -286,17 +292,21 @@ void SIGINT_handler(int signo) {
     if (signo == SIGINT) {
         if (!terminate) {
             terminate = 1;
-            return;
         } else {
-            exit(0);
+            syscall(SYS_exit_group, 0);
         }
     }
 }
 
 int main() {
+    int err;
     terminate = 0;
 
-    signal(SIGINT, SIGINT_handler);
+    sig_t sig_error = signal(SIGINT, SIGINT_handler);
+    if (sig_error == SIG_ERR) {
+        fprintf(stderr, "[ERROR] Unable to set SIGINT handler: %s\n",
+                strerror(errno));
+    }
 
     int server_sockfd = create_server_socket_and_listen(PORT);
     if (server_sockfd == -1) {
@@ -308,7 +318,22 @@ int main() {
     cache_size = 0;
     queue_head = NULL;
 
-    signal(SIGPIPE, SIG_IGN);
+    sig_error = signal(SIGPIPE, SIG_IGN);
+    if (sig_error == SIG_ERR) {
+        fprintf(stderr, "[ERROR] Unable to ingore SIGPIPE %s\n",
+                strerror(errno));
+    }
+
+    pthread_attr_t attr;
+    err = pthread_attr_init(&attr);
+    if (err) {
+        return 0;
+    }
+
+    err = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (err) {
+        return 0;
+    }
 
     while (!terminate) {
         struct sockaddr_in client_addr;
@@ -322,17 +347,21 @@ int main() {
                 continue;
             }
 
-            printf("[ERROR] Unable to accept");
-
+            fprintf(stderr, "[ERROR] Unable to accept new client");
             continue;
         }
 
-        printf("New client\n");
+        printf("[INFO] New client\n");
 
         pthread_t client_thread;
-        pthread_create(&client_thread, NULL, handle_client,
-                       (void*)(long)client_sockfd);
-        pthread_detach(client_thread);
+
+        err = pthread_create(&client_thread, &attr, handle_client,
+                             (void*)(long)client_sockfd);
+        if (err) {
+            fprintf(stderr, "[ERROR] pthread_create error\n");
+            close(client_sockfd);
+            continue;
+        }
     }
 
     pthread_exit(NULL);

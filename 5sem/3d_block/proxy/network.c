@@ -38,9 +38,14 @@ int create_server_socket_and_listen(int port) {
         close(server_sockfd);
         return ERROR;
     }
-    listen(server_sockfd, 5);
 
-    printf("Proxy server listening on port %d\n", port);
+    err = listen(server_sockfd, 5);
+    if (err == -1) {
+        close(server_sockfd);
+        return ERROR;
+    }
+
+    printf("[INFO] Proxy server listening on port %d\n", port);
     return server_sockfd;
 }
 

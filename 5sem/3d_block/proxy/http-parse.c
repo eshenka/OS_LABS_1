@@ -15,10 +15,10 @@
 // Code in this function is using picohttpparser library. The way of parsing
 // with it is fully described in README on github
 HTTP_PARSE http_parse_read_request(int client_sockfd, char* client_request,
-                                   int request_size, char* ret_method,
-                                   const int method_size, char* ret_url,
-                                   const int url_size, const int max_url_size,
-                                   int* minor_version, size_t* buflen) {
+                                   int request_size, char** ret_method,
+                                   char** ret_url, const int url_size,
+                                   const int max_url_size, int* minor_version,
+                                   size_t* buflen) {
     const char* method;
     const char* url;
     struct phr_header headers[100];
@@ -34,7 +34,7 @@ HTTP_PARSE http_parse_read_request(int client_sockfd, char* client_request,
             ;
 
         if (rret <= 0) {
-            printf("[ERROR] Error reading from client\n");
+            fprintf(stderr, "[ERROR] Error reading from client\n");
             return PARSE_ERROR;
         }
 
@@ -51,37 +51,33 @@ HTTP_PARSE http_parse_read_request(int client_sockfd, char* client_request,
         }
 
         if (pret != -2) {
-            printf("[ERROR] Error parsing client request\n");
+            fprintf(stderr, "[ERROR] Error parsing client request\n");
             return PARSE_ERROR;
         }
 
         if (*buflen == request_size) {
-            printf("[ERROR] Client request is too long\n");
+            fprintf(stderr, "[ERROR] Client request is too long\n");
             return PARSE_ERROR;
         }
     }
 
     if (url_len > max_url_size) {
-        printf("[ERROR] URL is too long\n");
+        fprintf(stderr, "[ERROR] URL is too long\n");
         return PARSE_ERROR;
     }
 
     if (url_len > url_size) {
-        ret_url = realloc(ret_url, sizeof(char) * url_len);
+        *ret_url = realloc(*ret_url, sizeof(char) * url_len);
     }
 
-    memcpy(ret_method, method, method_size - 1);
-    ret_method[method_size - 1] = '\0';
-
-    memcpy(ret_url, url, url_len);
-    ret_url[url_len] = '\0';
-
-    printf("HTTP GET %s\n", ret_url);
+    *ret_url = strndup(url, url_len);
+    *ret_method = strndup(method, method_len);
 
     return PARSE_SUCCESS;
 }
 
-HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
+HTTP_PARSE http_parse_read_response(int server_sockfd,
+                                    const size_t max_chunk_size,
                                     const int max_buffer_parts, size_t* buflen,
                                     CacheEntry* entry) {
     const char* msg;
@@ -90,7 +86,7 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
     int minor_version, status, pret;
     ssize_t rret;
 
-    size_t chunk_size = response_size;
+    size_t chunk_size = max_chunk_size;
     size_t chunk_len = *buflen;
     List* node = entry->data;
     List* head = entry->data;
@@ -149,17 +145,12 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
             pthread_rwlock_unlock(&entry->lock);
             break;
         } else if (pret == -1) {
-            printf("Closing. {pret == -1}\n");
+            fprintf(stderr, "[ERROR] Error parsing server response header\n");
             return PARSE_ERROR;
         }
 
         if (pret != -2) {
-            printf("Something went wrong during parsing http\n");
-            return PARSE_ERROR;
-        }
-
-        if (*buflen >= response_size) {
-            printf("Closing connection. Request is too long\n");
+            fprintf(stderr, "[ERROR] Error parsing server response header\n");
             return PARSE_ERROR;
         }
     }
@@ -171,6 +162,7 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
         }
 
         content_length = atoi(headers[i].value);
+        break;
     }
 
     rret = 0;
@@ -186,7 +178,7 @@ HTTP_PARSE http_parse_read_response(int server_sockfd, int response_size,
         rret = read(server_sockfd, buffer + chunk_len, chunk_size - chunk_len);
 
         if (rret == -1) {
-            printf("[ERROR] Read response error %d\n", entry->parts_done);
+            fprintf(stderr, "[ERROR] Read response error\n");
             return PARSE_ERROR;
         }
 
