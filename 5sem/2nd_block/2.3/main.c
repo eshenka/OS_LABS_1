@@ -8,10 +8,14 @@
 
 #include "linked_list.h"
 
+#define SEED 6475837
+
 bool cancel = false;
+int cnt = 0;
 
 int compared = 0;
 int swapped = 0;
+int successful = 0;
 
 void swap(Node* parent, Node** first, Node** second) {
     parent->next = *second;
@@ -76,14 +80,10 @@ void* equality_thread(void* list) {
 }
 
 void* swap_thread(void* list_v) {
+    unsigned int seed = 98453;
+
     while (!cancel) {
         List* list = (List*)list_v;
-
-        if (list->first->next == NULL) {
-            printf("Oh oh\n");
-        }
-
-        srand(time(NULL));
 
         Node* first = list->first;
         write_lock(first);
@@ -96,7 +96,14 @@ void* swap_thread(void* list_v) {
         while (third != NULL) {
             write_lock(third);
 
-            if (rand() < (RAND_MAX / 2)) {
+            int rand_v = rand_r(&seed);
+
+            if (rand_v < (RAND_MAX / 2)) {
+                if (cnt <= 10) {
+                    printf("v = %d\n", rand_v);
+                    cnt++;
+                }
+                __sync_fetch_and_add(&successful, 1);
                 swap(first, &second, &third);
             }
 
@@ -119,7 +126,12 @@ void* swap_thread(void* list_v) {
 }
 
 int main(int argc, char* argv[]) {
+    srand(SEED);
+
     List* list = create_list(atoi(argv[1]));
+
+    printf("%s\n%s\n%s\n", list->first->value, list->first->next->value,
+           list->first->next->next->value);
 
     pthread_t tids[6];
 
@@ -139,8 +151,8 @@ int main(int argc, char* argv[]) {
         pthread_join(tids[i], NULL);
     }
 
-    printf("compared = %d\nswapped = %d\nrelation = %f\n", compared, swapped,
-           (float)compared / swapped);
+    printf("compared = %d\nswapped = %d\nrelation = %f\nsuccessful = %d\n",
+           compared, swapped, (float)compared / swapped, successful);
 
     destroy_list(list);
 
