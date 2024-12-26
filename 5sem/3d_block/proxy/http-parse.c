@@ -89,7 +89,6 @@ HTTP_PARSE http_parse_read_response(int server_sockfd,
     size_t chunk_size = max_chunk_size;
     size_t chunk_len = *buflen;
     List* node = entry->data;
-    List* head = entry->data;
 
     char buffer[chunk_size];
 
@@ -165,6 +164,10 @@ HTTP_PARSE http_parse_read_response(int server_sockfd,
         break;
     }
 
+    if (content_length + pret > chunk_size * max_buffer_parts) {
+        entry->error = true;
+    }
+
     rret = 0;
     int offset = (content_length + pret) % chunk_size;
     while (content_length == -1 || *buflen < content_length + pret) {
@@ -182,7 +185,24 @@ HTTP_PARSE http_parse_read_response(int server_sockfd,
             return PARSE_ERROR;
         }
 
-        if (rret == 0 && content_length == -1) {
+        if (rret == 0) {
+            pthread_rwlock_wrlock(&entry->lock);
+            if (entry->parts_done == max_buffer_parts) {
+                entry->error = true;
+
+            } else {
+
+                memcpy(node->buffer, buffer, chunk_len);
+                __sync_fetch_and_add(&entry->parts_done, 1);
+                pthread_cond_broadcast(&entry->new_part);
+            }
+
+            if (content_length != *buflen - pret && content_length != -1) {
+                entry->error = true;
+            }
+
+            pthread_rwlock_unlock(&entry->lock);
+
             break;
         }
 
